@@ -75,6 +75,8 @@ public class DataSeeder implements ApplicationRunner {
         if (categoryRepository.findAll().isEmpty()) {
             seedAdminCatalog();
             log.info("Seed: catálogo admin");
+        } else {
+            ensureProductColors();
         }
         if (siteConfigRepository.find().isEmpty()) {
             siteConfigRepository.save(new SiteConfig(
@@ -91,6 +93,16 @@ public class DataSeeder implements ApplicationRunner {
         if (quoteRequestRepository.findAll().isEmpty()) {
             seedQuotes();
             log.info("Seed: cotizaciones de ejemplo");
+        }
+    }
+
+    private void ensureProductColors() {
+        var existing = colorRepository.findAll().stream().map(Color::name).collect(java.util.stream.Collectors.toSet());
+        if (!existing.contains("Rosa")) {
+            colorRepository.save(new Color("cl9", "Rosa", "#f6c6c0", true));
+        }
+        if (!existing.contains("Azul")) {
+            colorRepository.save(new Color("cl10", "Azul", "#cfd9ee", true));
         }
     }
 
@@ -158,13 +170,15 @@ public class DataSeeder implements ApplicationRunner {
         materialRepository.save(new Material("m3", "Madera", List.of("Natural", "Barnizada")));
 
         colorRepository.save(new Color("cl1", "Negro", "#111111", true));
-        colorRepository.save(new Color("cl2", "Blanco", "#ffffff", true));
+        colorRepository.save(new Color("cl2", "Blanco", "#f5f5f0", true));
         colorRepository.save(new Color("cl3", "Kraft", "#c8a978", true));
         colorRepository.save(new Color("cl4", "Dorado", "#d4af37", true));
         colorRepository.save(new Color("cl5", "Plateado", "#c0c0c0", true));
         colorRepository.save(new Color("cl6", "Azul Marino", "#1e2a4a", true));
         colorRepository.save(new Color("cl7", "Rojo", "#c62828", true));
-        colorRepository.save(new Color("cl8", "Verde", "#2e7d32", true));
+        colorRepository.save(new Color("cl8", "Verde", "#cfe7d8", true));
+        colorRepository.save(new Color("cl9", "Rosa", "#f6c6c0", true));
+        colorRepository.save(new Color("cl10", "Azul", "#cfd9ee", true));
 
         finishRepository.save(new Finish("f1", "Papel", "Forro de papel decorativo"));
         finishRepository.save(new Finish("f2", "Vinil", "Forro de vinil texturizado"));

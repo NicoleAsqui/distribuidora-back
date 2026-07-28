@@ -52,15 +52,23 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
             return true;
         }
         if (path.startsWith("/api/quotes")) {
-            // público: crear cotización; admin: listar/editar
             return !HttpMethod.POST.matches(method) || path.contains("/status");
         }
         if (path.startsWith("/api/orders")) {
-            // público: crear pedido; admin: listar/editar
             if (HttpMethod.POST.matches(method) && path.equals("/api/orders")) {
                 return false;
             }
             return true;
+        }
+        if (path.startsWith("/api/pricing-quotes")) {
+            // público: crear; admin: listar/editar/borrar
+            if (HttpMethod.POST.matches(method) && path.equals("/api/pricing-quotes")) {
+                return false;
+            }
+            return true;
+        }
+        if (path.startsWith("/api/quote-engine")) {
+            return !HttpMethod.GET.matches(method);
         }
         if (path.equals("/api/config") && HttpMethod.PUT.matches(method)) {
             return true;
