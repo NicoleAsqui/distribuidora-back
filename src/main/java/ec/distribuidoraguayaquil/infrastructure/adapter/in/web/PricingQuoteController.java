@@ -119,23 +119,27 @@ public class PricingQuoteController {
         return e;
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> toMap(PricingQuoteEntity e) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", e.getId());
         map.put("code", e.getCode());
         map.put("source", e.getSource());
-        map.put("createdAt", e.getCreatedAt().toString());
+        map.put("createdAt", e.getCreatedAt() == null ? Instant.now().toString() : e.getCreatedAt().toString());
         map.put("clientName", e.getClientName());
         map.put("clientPhone", e.getClientPhone());
         map.put("clientEmail", e.getClientEmail());
         map.put("deliveryDate", e.getDeliveryDate());
         map.put("status", e.getStatus());
         map.put("notes", e.getNotes());
-        map.put("total", e.getTotal());
+        map.put("total", e.getTotal() == null ? BigDecimal.ZERO : e.getTotal());
+        String json = e.getItemsJson();
+        if (json == null || json.isBlank()) {
+            map.put("items", List.of());
+            return map;
+        }
         try {
-            map.put("items", objectMapper.readValue(e.getItemsJson(), List.class));
-        } catch (JacksonException ex) {
+            map.put("items", objectMapper.readValue(json, List.class));
+        } catch (Exception ex) {
             map.put("items", List.of());
         }
         return map;

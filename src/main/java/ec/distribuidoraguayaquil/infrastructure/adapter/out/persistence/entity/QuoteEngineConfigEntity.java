@@ -3,7 +3,6 @@ package ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 @Entity
@@ -12,8 +11,7 @@ public class QuoteEngineConfigEntity {
     @Id
     private String motor;
 
-    @Lob
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(name = "config_json", nullable = false, columnDefinition = "TEXT")
     private String configJson;
 
     public String getMotor() { return motor; }
