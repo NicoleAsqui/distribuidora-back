@@ -36,6 +36,12 @@ public class ProductEntity {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
+
+    @Column(name = "image_thumb_url", length = 1000)
+    private String imageThumbUrl;
+
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<ProductVariantEntity> variants = new ArrayList<>();
 
@@ -53,6 +59,10 @@ public class ProductEntity {
     public void setTopProduct(boolean topProduct) { this.topProduct = topProduct; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getImageThumbUrl() { return imageThumbUrl; }
+    public void setImageThumbUrl(String imageThumbUrl) { this.imageThumbUrl = imageThumbUrl; }
     public List<ProductVariantEntity> getVariants() { return variants; }
     public void setVariants(List<ProductVariantEntity> variants) { this.variants = variants; }
 }

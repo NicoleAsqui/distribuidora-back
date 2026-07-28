@@ -39,6 +39,9 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
     }
 
     private boolean requiresAuth(String path, String method) {
+        if (path.startsWith("/api/uploads/")) {
+            return true;
+        }
         if (path.startsWith("/api/admin/")) {
             return true;
         }

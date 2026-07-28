@@ -10,6 +10,10 @@ public record Product(
         String shortDesc,
         boolean top,
         List<ProductVariant> variants,
-        boolean active
+        boolean active,
+        /** URL pública imagen detalle (~1200px). */
+        String image,
+        /** URL pública miniatura catálogo (~380px). */
+        String imageThumb
 ) {
 }

@@ -50,6 +50,8 @@ public class ProductPersistenceAdapter implements ProductRepositoryPort {
         entity.setShortDesc(product.shortDesc());
         entity.setTopProduct(product.top());
         entity.setActive(product.active());
+        entity.setImageUrl(product.image());
+        entity.setImageThumbUrl(product.imageThumb());
         entity.getVariants().clear();
         if (product.variants() != null) {
             for (ProductVariant v : product.variants()) {
@@ -75,6 +77,7 @@ public class ProductPersistenceAdapter implements ProductRepositoryPort {
                 .map(v -> new ProductVariant(v.getSize(), v.getColor(), v.getPrice(), v.getTag()))
                 .toList();
         return new Product(e.getId(), e.getRef(), e.getName(), e.getCategory(), e.getShortDesc(),
-                e.isTopProduct(), variants, e.isActive());
+                e.isTopProduct(), variants, e.isActive(),
+                e.getImageUrl(), e.getImageThumbUrl());
     }
 }

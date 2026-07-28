@@ -39,18 +39,22 @@ public class ProductService implements ProductUseCase {
     public Product create(Product product) {
         String id = product.id() == null || product.id().isBlank() ? UUID.randomUUID().toString() : product.id();
         Product toSave = new Product(id, product.ref(), product.name(), product.category(),
-                product.shortDesc(), product.top(), product.variants(), product.active());
+                product.shortDesc(), product.top(), product.variants(), product.active(),
+                product.image(), product.imageThumb());
         return productRepository.save(toSave);
     }
 
     @Override
     public Product update(String id, Product product) {
-        productRepository.findAll().stream()
+        Product existing = productRepository.findAll().stream()
                 .filter(p -> p.id().equals(id))
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
+        String image = product.image() != null ? product.image() : existing.image();
+        String imageThumb = product.imageThumb() != null ? product.imageThumb() : existing.imageThumb();
         return productRepository.save(new Product(id, product.ref(), product.name(), product.category(),
-                product.shortDesc(), product.top(), product.variants(), product.active()));
+                product.shortDesc(), product.top(), product.variants(), product.active(),
+                image, imageThumb));
     }
 
     @Override
