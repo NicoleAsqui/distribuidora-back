@@ -31,6 +31,11 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
     }
 
     @Override
+    public Optional<Order> findByCode(String code) {
+        return repository.findByCode(code).map(this::toDomain);
+    }
+
+    @Override
     public Order save(Order order) {
         OrderEntity entity = repository.findById(order.id()).orElseGet(OrderEntity::new);
         entity.setId(order.id());
@@ -39,6 +44,7 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
         entity.setClientEmail(order.clientEmail());
         entity.setClientPhone(order.clientPhone());
         entity.setNotes(order.notes());
+        entity.setCheckoutJson(order.checkoutJson());
         entity.setTotal(order.total());
         entity.setStatus(order.status());
         entity.setCreatedAt(order.createdAt());
@@ -69,6 +75,6 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
                 .map(i -> new OrderItem(i.getProductRef(), i.getName(), i.getSize(), i.getColor(), i.getPrice(), i.getQty()))
                 .toList();
         return new Order(e.getId(), e.getCode(), e.getClientName(), e.getClientEmail(), e.getClientPhone(),
-                e.getNotes(), items, e.getTotal(), e.getStatus(), e.getCreatedAt());
+                e.getNotes(), e.getCheckoutJson(), items, e.getTotal(), e.getStatus(), e.getCreatedAt());
     }
 }

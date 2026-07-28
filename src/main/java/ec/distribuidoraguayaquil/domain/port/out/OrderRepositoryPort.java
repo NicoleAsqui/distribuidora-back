@@ -8,6 +8,7 @@ import java.util.Optional;
 public interface OrderRepositoryPort {
     List<Order> findAll();
     Optional<Order> findById(String id);
+    Optional<Order> findByCode(String code);
     Order save(Order order);
     long nextSequence();
 }

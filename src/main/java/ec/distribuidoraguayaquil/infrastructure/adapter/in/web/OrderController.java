@@ -31,6 +31,12 @@ public class OrderController {
         return orderUseCase.listAll();
     }
 
+    /** Público: página de gracias / resumen por código PED-… */
+    @GetMapping("/public/{code}")
+    public Order getPublicByCode(@PathVariable String code) {
+        return orderUseCase.getByCode(code);
+    }
+
     @GetMapping("/{id}")
     public Order get(@PathVariable String id) {
         return orderUseCase.getById(id);
@@ -43,7 +49,7 @@ public class OrderController {
                 .toList();
         return orderUseCase.create(new Order(
                 null, null, request.clientName(), request.clientEmail(), request.clientPhone(),
-                request.notes(), items, null, null, null));
+                request.notes(), request.checkoutJson(), items, null, null, null));
     }
 
     @PutMapping("/{id}/status")

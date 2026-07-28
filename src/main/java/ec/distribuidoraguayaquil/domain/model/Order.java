@@ -11,6 +11,7 @@ public record Order(
         String clientEmail,
         String clientPhone,
         String notes,
+        String checkoutJson,
         List<OrderItem> items,
         BigDecimal total,
         RequestStatus status,

@@ -14,6 +14,8 @@ public record CreateOrderRequest(
         String clientEmail,
         String clientPhone,
         String notes,
+        /** JSON con datos de checkout (entrega, factura, zona, ciudad…). */
+        String checkoutJson,
         @NotEmpty @Valid List<OrderItemDto> items
 ) {
     public record OrderItemDto(

@@ -35,6 +35,12 @@ public class OrderService implements OrderUseCase {
     }
 
     @Override
+    public Order getByCode(String code) {
+        return repository.findByCode(code)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+    }
+
+    @Override
     public Order create(Order order) {
         List<OrderItem> items = order.items() == null ? List.of() : order.items();
         BigDecimal total = items.stream()
@@ -48,6 +54,7 @@ public class OrderService implements OrderUseCase {
                 order.clientEmail(),
                 order.clientPhone(),
                 order.notes(),
+                order.checkoutJson(),
                 items,
                 total,
                 RequestStatus.PENDING,
@@ -61,7 +68,7 @@ public class OrderService implements OrderUseCase {
         Order existing = getById(id);
         return repository.save(new Order(
                 existing.id(), existing.code(), existing.clientName(), existing.clientEmail(),
-                existing.clientPhone(), existing.notes(), existing.items(), existing.total(),
-                status, existing.createdAt()));
+                existing.clientPhone(), existing.notes(), existing.checkoutJson(), existing.items(),
+                existing.total(), status, existing.createdAt()));
     }
 }

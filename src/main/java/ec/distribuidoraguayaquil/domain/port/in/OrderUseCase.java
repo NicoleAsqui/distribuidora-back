@@ -8,6 +8,7 @@ import java.util.List;
 public interface OrderUseCase {
     List<Order> listAll();
     Order getById(String id);
+    Order getByCode(String code);
     Order create(Order order);
     Order updateStatus(String id, RequestStatus status);
 }

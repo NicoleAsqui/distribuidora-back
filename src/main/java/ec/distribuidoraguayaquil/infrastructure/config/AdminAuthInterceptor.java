@@ -61,6 +61,9 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
             if (HttpMethod.POST.matches(method) && path.equals("/api/orders")) {
                 return false;
             }
+            if (HttpMethod.GET.matches(method) && path.startsWith("/api/orders/public/")) {
+                return false;
+            }
             return true;
         }
         if (path.startsWith("/api/pricing-quotes")) {

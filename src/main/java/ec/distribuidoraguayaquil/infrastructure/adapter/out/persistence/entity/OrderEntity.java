@@ -29,8 +29,10 @@ public class OrderEntity {
     private String clientEmail;
     @Column(name = "client_phone")
     private String clientPhone;
-    @Column(length = 2000)
+    @Column(columnDefinition = "TEXT")
     private String notes;
+    @Column(name = "checkout_json", columnDefinition = "TEXT")
+    private String checkoutJson;
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal total;
     @Enumerated(EnumType.STRING)
@@ -53,6 +55,8 @@ public class OrderEntity {
     public void setClientPhone(String clientPhone) { this.clientPhone = clientPhone; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public String getCheckoutJson() { return checkoutJson; }
+    public void setCheckoutJson(String checkoutJson) { this.checkoutJson = checkoutJson; }
     public BigDecimal getTotal() { return total; }
     public void setTotal(BigDecimal total) { this.total = total; }
     public RequestStatus getStatus() { return status; }
