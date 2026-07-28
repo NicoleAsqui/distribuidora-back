@@ -51,3 +51,7 @@ app:
     upload-prefix: ${GCS_UPLOAD_PREFIX:products}
     public-base-url: ${GCS_PUBLIC_BASE_URL:}
     cache-control: ${GCS_UPLOAD_CACHE_CONTROL:public, max-age=31536000, immutable}
+  mail:
+    resend-api-key: ${RESEND_API_KEY:}
+    from: ${MAIL_FROM:noreply@distribuidoraguayaquil.com}
+    from-name: ${MAIL_FROM_NAME:Distribuidora Guayaquil}

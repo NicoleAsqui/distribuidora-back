@@ -1,5 +1,6 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
+import ec.distribuidoraguayaquil.application.service.QuoteAdminMailService;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.PricingQuoteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.PricingQuoteJpaRepository;
 import org.springframework.http.HttpStatus;
@@ -28,10 +29,15 @@ public class PricingQuoteController {
 
     private final PricingQuoteJpaRepository repository;
     private final ObjectMapper objectMapper;
+    private final QuoteAdminMailService quoteAdminMailService;
 
-    public PricingQuoteController(PricingQuoteJpaRepository repository, ObjectMapper objectMapper) {
+    public PricingQuoteController(
+            PricingQuoteJpaRepository repository,
+            ObjectMapper objectMapper,
+            QuoteAdminMailService quoteAdminMailService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.quoteAdminMailService = quoteAdminMailService;
     }
 
     @GetMapping
@@ -47,7 +53,14 @@ public class PricingQuoteController {
 
     @PostMapping
     public Map<String, Object> create(@RequestBody Map<String, Object> body) {
-        return toMap(repository.save(fromBody(body, true)));
+        PricingQuoteEntity saved = repository.save(fromBody(body, true));
+        quoteAdminMailService.notifyAdminNewWebQuote(saved);
+        Map<String, Object> map = toMap(saved);
+        // Cliente web: no devolver precios en la respuesta
+        if ("web".equalsIgnoreCase(saved.getSource())) {
+            return publicClientView(map);
+        }
+        return map;
     }
 
     @PutMapping("/{id}")
@@ -130,5 +143,36 @@ public class PricingQuoteController {
 
     private static String asString(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> publicClientView(Map<String, Object> full) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", full.get("id"));
+        map.put("code", full.get("code"));
+        map.put("source", full.get("source"));
+        map.put("createdAt", full.get("createdAt"));
+        map.put("clientName", full.get("clientName"));
+        map.put("clientPhone", full.get("clientPhone"));
+        map.put("clientEmail", full.get("clientEmail"));
+        map.put("deliveryDate", full.get("deliveryDate"));
+        map.put("status", full.get("status"));
+        map.put("notes", full.get("notes"));
+        Object itemsObj = full.get("items");
+        if (itemsObj instanceof List<?> list) {
+            map.put("items", list.stream().map(it -> {
+                if (!(it instanceof Map<?, ?> raw)) return it;
+                Map<String, Object> item = new LinkedHashMap<>();
+                raw.forEach((k, v) -> {
+                    String key = String.valueOf(k);
+                    if ("pricing".equals(key)) return;
+                    item.put(key, v);
+                });
+                return item;
+            }).toList());
+        } else {
+            map.put("items", List.of());
+        }
+        return map;
     }
 }
