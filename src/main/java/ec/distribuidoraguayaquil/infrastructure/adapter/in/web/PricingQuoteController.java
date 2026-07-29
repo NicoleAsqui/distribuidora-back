@@ -42,7 +42,7 @@ public class PricingQuoteController {
 
     @GetMapping
     public List<Map<String, Object>> list() {
-        return repository.findAllByOrderByCreatedAtDesc().stream().map(this::toMap).toList();
+        return repository.findAllOrderedByCreatedAtDesc().stream().map(this::toMap).toList();
     }
 
     @GetMapping("/{id}")
