@@ -140,7 +140,9 @@ public class PricingQuoteController {
         try {
             map.put("items", objectMapper.readValue(json, List.class));
         } catch (Exception ex) {
+            // Si items_json quedó corrupto (p.ej. OID de CLOB), no tumbar el listado
             map.put("items", List.of());
+            map.put("itemsParseError", true);
         }
         return map;
     }
