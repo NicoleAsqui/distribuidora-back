@@ -10,6 +10,8 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -29,8 +31,10 @@ public class OrderEntity {
     private String clientEmail;
     @Column(name = "client_phone")
     private String clientPhone;
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(columnDefinition = "TEXT")
     private String notes;
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "checkout_json", columnDefinition = "TEXT")
     private String checkoutJson;
     @Column(nullable = false, precision = 14, scale = 2)

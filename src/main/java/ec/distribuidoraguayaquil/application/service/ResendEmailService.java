@@ -19,9 +19,9 @@ public class ResendEmailService {
     private final MailProperties mailProperties;
     private final RestClient restClient;
 
-    public ResendEmailService(MailProperties mailProperties, RestClient.Builder restClientBuilder) {
+    public ResendEmailService(MailProperties mailProperties) {
         this.mailProperties = mailProperties;
-        this.restClient = restClientBuilder.build();
+        this.restClient = RestClient.create();
     }
 
     public boolean isConfigured() {

@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,6 +40,8 @@ public class PricingQuoteEntity {
     @Column(nullable = false)
     private String status;
 
+    /** LONGVARCHAR evita CLOB/LOB de Postgres (falla en auto-commit / Neon pooler). */
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "items_json", nullable = false, columnDefinition = "TEXT")
     private String itemsJson;
 
