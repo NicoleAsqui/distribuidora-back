@@ -31,6 +31,8 @@ public class OrderItemEntity {
     private BigDecimal price;
     @Column(nullable = false)
     private int qty;
+    @Column(length = 2000)
+    private String image;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -48,4 +50,6 @@ public class OrderItemEntity {
     public void setPrice(BigDecimal price) { this.price = price; }
     public int getQty() { return qty; }
     public void setQty(int qty) { this.qty = qty; }
+    public String getImage() { return image; }
+    public void setImage(String image) { this.image = image; }
 }

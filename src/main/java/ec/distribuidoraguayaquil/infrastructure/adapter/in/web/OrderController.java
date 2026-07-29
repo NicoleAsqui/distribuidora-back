@@ -45,7 +45,7 @@ public class OrderController {
     @PostMapping
     public Order create(@Valid @RequestBody CreateOrderRequest request) {
         List<OrderItem> items = request.items().stream()
-                .map(i -> new OrderItem(i.productRef(), i.name(), i.size(), i.color(), i.price(), i.qty()))
+                .map(i -> new OrderItem(i.productRef(), i.name(), i.size(), i.color(), i.price(), i.qty(), i.image()))
                 .toList();
         return orderUseCase.create(new Order(
                 null, null, request.clientName(), request.clientEmail(), request.clientPhone(),

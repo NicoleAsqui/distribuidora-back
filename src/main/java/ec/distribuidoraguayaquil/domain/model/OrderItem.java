@@ -8,6 +8,8 @@ public record OrderItem(
         String size,
         String color,
         BigDecimal price,
-        int qty
+        int qty,
+        /** URL imagen del producto al momento del pedido (opcional). */
+        String image
 ) {
 }

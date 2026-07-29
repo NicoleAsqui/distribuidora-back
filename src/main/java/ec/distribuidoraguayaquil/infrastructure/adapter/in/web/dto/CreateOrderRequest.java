@@ -24,7 +24,8 @@ public record CreateOrderRequest(
             String size,
             String color,
             @NotNull BigDecimal price,
-            @Min(1) int qty
+            @Min(1) int qty,
+            String image
     ) {
     }
 }
