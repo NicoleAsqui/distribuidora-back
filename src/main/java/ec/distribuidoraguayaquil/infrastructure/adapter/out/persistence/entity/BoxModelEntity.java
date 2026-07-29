@@ -18,6 +18,9 @@ public class BoxModelEntity {
     private String name;
     @Column(name = "category_id", nullable = false)
     private String categoryId;
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "category_ids", length = 2000)
+    private List<String> categoryIds = new ArrayList<>();
     @Column(length = 2000)
     private String description;
     @Convert(converter = StringListConverter.class)
@@ -48,6 +51,8 @@ public class BoxModelEntity {
     public void setName(String name) { this.name = name; }
     public String getCategoryId() { return categoryId; }
     public void setCategoryId(String categoryId) { this.categoryId = categoryId; }
+    public List<String> getCategoryIds() { return categoryIds; }
+    public void setCategoryIds(List<String> categoryIds) { this.categoryIds = categoryIds; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public List<String> getPhotos() { return photos; }

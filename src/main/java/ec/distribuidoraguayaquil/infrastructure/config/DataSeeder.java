@@ -24,6 +24,7 @@ import java.util.List;
 
 /**
  * Solo catálogo auxiliar y config. Los productos se crean desde Admin + imágenes GCS.
+ * Modelos de caja: seeder mínimo; el catálogo completo va en sql/seed-box-models.sql.
  */
 @Component
 public class DataSeeder implements ApplicationRunner {
@@ -62,6 +63,12 @@ public class DataSeeder implements ApplicationRunner {
             log.info("Seed: catálogo admin (sin productos)");
         } else {
             ensureProductColors();
+            ensureExtraCategories();
+            ensureMaterialOptions();
+        }
+        if (boxModelRepository.findAll().isEmpty()) {
+            seedSampleModels();
+            log.info("Seed: modelos de caja de ejemplo (usar sql/seed-box-models.sql para el catálogo completo)");
         }
         if (siteConfigRepository.find().isEmpty()) {
             siteConfigRepository.save(new SiteConfig(
@@ -87,6 +94,27 @@ public class DataSeeder implements ApplicationRunner {
         }
     }
 
+    private void ensureExtraCategories() {
+        var byId = categoryRepository.findAll().stream().map(Category::id).collect(java.util.stream.Collectors.toSet());
+        if (!byId.contains("c8")) categoryRepository.save(new Category("c8", "Flores", "flores"));
+        if (!byId.contains("c9")) categoryRepository.save(new Category("c9", "Chocolates", "chocolates"));
+        if (!byId.contains("c10")) categoryRepository.save(new Category("c10", "Navidad", "navidad"));
+    }
+
+    private void ensureMaterialOptions() {
+        for (Material m : materialRepository.findAll()) {
+            if ("Cartulina".equalsIgnoreCase(m.name()) && (m.options() == null || m.options().size() < 3)) {
+                materialRepository.save(new Material(m.id(), m.name(), List.of("Blanca", "Kraft", "Color")));
+            } else if ("Cartón".equalsIgnoreCase(m.name()) || "Carton".equalsIgnoreCase(m.name())) {
+                if (m.options() == null || m.options().size() < 3) {
+                    materialRepository.save(new Material(m.id(), "Cartón", List.of("Con forro", "Sin forro", "Con impresión")));
+                }
+            } else if ("Madera".equalsIgnoreCase(m.name()) && (m.options() == null || !m.options().contains("Pintada"))) {
+                materialRepository.save(new Material(m.id(), m.name(), List.of("Natural", "Pintada")));
+            }
+        }
+    }
+
     private void seedAdminCatalog() {
         categoryRepository.save(new Category("c1", "Regalos", "regalos"));
         categoryRepository.save(new Category("c2", "Corporativas", "corporativas"));
@@ -95,10 +123,13 @@ public class DataSeeder implements ApplicationRunner {
         categoryRepository.save(new Category("c5", "Alimentos", "alimentos"));
         categoryRepository.save(new Category("c6", "Eventos", "eventos"));
         categoryRepository.save(new Category("c7", "Joyería", "joyeria"));
+        categoryRepository.save(new Category("c8", "Flores", "flores"));
+        categoryRepository.save(new Category("c9", "Chocolates", "chocolates"));
+        categoryRepository.save(new Category("c10", "Navidad", "navidad"));
 
-        materialRepository.save(new Material("m1", "Cartulina", List.of("Blanca", "Kraft")));
-        materialRepository.save(new Material("m2", "Cartón", List.of("Con forro", "Sin forro")));
-        materialRepository.save(new Material("m3", "Madera", List.of("Natural", "Barnizada")));
+        materialRepository.save(new Material("m1", "Cartulina", List.of("Blanca", "Kraft", "Color")));
+        materialRepository.save(new Material("m2", "Cartón", List.of("Con forro", "Sin forro", "Con impresión")));
+        materialRepository.save(new Material("m3", "Madera", List.of("Natural", "Pintada")));
 
         colorRepository.save(new Color("cl1", "Negro", "#111111", true));
         colorRepository.save(new Color("cl2", "Blanco", "#f5f5f0", true));
@@ -130,11 +161,18 @@ public class DataSeeder implements ApplicationRunner {
         tagRepository.save(new Tag("t8", "Navidad", "#c62828"));
         tagRepository.save(new Tag("t9", "Minimalista", "#607d8b"));
 
-        boxModelRepository.save(new BoxModel("mo1", "Caja Magnética", "c1",
+        seedSampleModels();
+    }
+
+    private void seedSampleModels() {
+        if (!boxModelRepository.findAll().isEmpty()) return;
+        boxModelRepository.save(new BoxModel(
+                "mo_magnetica", "Caja Magnética", "c1", List.of("c1", "c2"),
                 "Cierre magnético premium, ideal para regalos corporativos.",
                 List.of(), List.of("m2"), List.of("f1", "f3", "f4"), List.of("cl1", "cl2", "cl4"),
                 25, 21, List.of("t1", "t3", "t7"), true));
-        boxModelRepository.save(new BoxModel("mo2", "Caja Tipo Libro", "c1",
+        boxModelRepository.save(new BoxModel(
+                "mo_tipo_libro", "Caja Tipo Libro", "c1", List.of("c1", "c2", "c7"),
                 "Apertura tipo libro con imán lateral.",
                 List.of(), List.of("m2"), List.of("f1", "f2"), List.of("cl1", "cl3"),
                 20, 18, List.of("t1", "t2"), true));

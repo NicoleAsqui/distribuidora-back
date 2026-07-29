@@ -132,7 +132,7 @@ public class CatalogAdminService implements CatalogAdminUseCase {
     public BoxModel saveModel(BoxModel model) {
         String id = blank(model.id()) ? UUID.randomUUID().toString() : model.id();
         return boxModelRepository.save(new BoxModel(
-                id, model.name(), model.categoryId(), model.description(), model.photos(),
+                id, model.name(), model.categoryId(), model.categoryIds(), model.description(), model.photos(),
                 model.materials(), model.finishes(), model.colors(), model.minQty(),
                 model.leadDays(), model.tags(), model.active()));
     }

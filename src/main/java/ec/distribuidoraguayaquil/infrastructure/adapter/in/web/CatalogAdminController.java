@@ -107,7 +107,7 @@ public class CatalogAdminController {
     @PutMapping("/models/{id}")
     public BoxModel updateModel(@PathVariable String id, @RequestBody BoxModel model) {
         return catalogAdminUseCase.saveModel(new BoxModel(
-                id, model.name(), model.categoryId(), model.description(), model.photos(),
+                id, model.name(), model.categoryId(), model.categoryIds(), model.description(), model.photos(),
                 model.materials(), model.finishes(), model.colors(), model.minQty(),
                 model.leadDays(), model.tags(), model.active()));
     }

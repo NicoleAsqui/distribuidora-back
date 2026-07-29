@@ -36,10 +36,14 @@ public class BoxModelPersistenceAdapter implements BoxModelRepositoryPort {
 
     @Override
     public BoxModel save(BoxModel model) {
-        BoxModelEntity e = new BoxModelEntity();
+        List<String> categoryIds = normalizeCategoryIds(model.categoryIds(), model.categoryId());
+        String categoryId = categoryIds.isEmpty() ? (model.categoryId() == null ? "" : model.categoryId()) : categoryIds.get(0);
+
+        BoxModelEntity e = repository.findById(model.id()).orElseGet(BoxModelEntity::new);
         e.setId(model.id());
         e.setName(model.name());
-        e.setCategoryId(model.categoryId());
+        e.setCategoryId(categoryId);
+        e.setCategoryIds(categoryIds);
         e.setDescription(model.description());
         e.setPhotos(copy(model.photos()));
         e.setMaterials(copy(model.materials()));
@@ -58,9 +62,25 @@ public class BoxModelPersistenceAdapter implements BoxModelRepositoryPort {
     }
 
     private BoxModel toDomain(BoxModelEntity e) {
-        return new BoxModel(e.getId(), e.getName(), e.getCategoryId(), e.getDescription(),
+        List<String> categoryIds = normalizeCategoryIds(e.getCategoryIds(), e.getCategoryId());
+        String categoryId = categoryIds.isEmpty() ? e.getCategoryId() : categoryIds.get(0);
+        return new BoxModel(
+                e.getId(), e.getName(), categoryId, categoryIds, e.getDescription(),
                 e.getPhotos(), e.getMaterials(), e.getFinishes(), e.getColors(),
                 e.getMinQty(), e.getLeadDays(), e.getTags(), e.isActive());
+    }
+
+    private static List<String> normalizeCategoryIds(List<String> ids, String fallback) {
+        List<String> out = new ArrayList<>();
+        if (ids != null) {
+            for (String id : ids) {
+                if (id != null && !id.isBlank() && !out.contains(id)) out.add(id);
+            }
+        }
+        if (out.isEmpty() && fallback != null && !fallback.isBlank()) {
+            out.add(fallback);
+        }
+        return out;
     }
 
     private static List<String> copy(List<String> values) {
