@@ -21,7 +21,8 @@ spring:
       connection-timeout: 30000
   jpa:
     hibernate:
-      ddl-auto: update
+      # El esquema del catálogo se gestiona con los scripts de docs/sql, no con Hibernate.
+      ddl-auto: ${JPA_DDL_AUTO:none}
     open-in-view: false
     properties:
       hibernate:
@@ -55,3 +56,18 @@ app:
     resend-api-key: ${RESEND_API_KEY:}
     from: ${MAIL_FROM:noreply@distribuidoraguayaquil.com}
     from-name: ${MAIL_FROM_NAME:Distribuidora Guayaquil}
+  # Facturación electrónica (proxy a open-api-facturacion-sri)
+  # SRI_API_URL, SRI_API_TOKEN, SRI_EMISOR_* — ver .env.example
+  sri:
+    api-url: ${SRI_API_URL:}
+    api-token: ${SRI_API_TOKEN:}
+    ambiente: ${SRI_AMBIENTE:1}
+    emisor:
+      ruc: ${SRI_EMISOR_RUC:}
+      razon-social: ${SRI_EMISOR_RAZON_SOCIAL:}
+      nombre-comercial: ${SRI_EMISOR_NOMBRE_COMERCIAL:}
+      dir-matriz: ${SRI_EMISOR_DIR_MATRIZ:}
+      dir-establecimiento: ${SRI_EMISOR_DIR_ESTABLECIMIENTO:}
+      establecimiento: ${SRI_EMISOR_ESTAB:001}
+      punto-emision: ${SRI_EMISOR_PTO:001}
+      obligado-contabilidad: ${SRI_EMISOR_OBLIGADO_CONTABILIDAD:SI}

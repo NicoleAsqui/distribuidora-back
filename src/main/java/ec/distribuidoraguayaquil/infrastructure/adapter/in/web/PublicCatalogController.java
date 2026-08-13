@@ -1,46 +1,55 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
-import ec.distribuidoraguayaquil.domain.model.Color;
-import ec.distribuidoraguayaquil.domain.port.in.CatalogAdminUseCase;
-import ec.distribuidoraguayaquil.domain.port.out.ProductRepositoryPort;
+import ec.distribuidoraguayaquil.application.service.CatalogQueryService;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.LegacyColorDto;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ColorEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
+/** Lecturas públicas del catálogo (sin autenticación). */
 @RestController
 @RequestMapping("/api/catalog")
+@RequiredArgsConstructor
 public class PublicCatalogController {
 
-    private final ProductRepositoryPort productRepository;
-    private final CatalogAdminUseCase catalogAdminUseCase;
+    private final CatalogQueryService catalogQueryService;
 
-    public PublicCatalogController(ProductRepositoryPort productRepository, CatalogAdminUseCase catalogAdminUseCase) {
-        this.productRepository = productRepository;
-        this.catalogAdminUseCase = catalogAdminUseCase;
+    @GetMapping("/disenos")
+    public List<DisenoEntity> disenos() {
+        return catalogQueryService.listDisenosActivos();
     }
 
+    @GetMapping("/ideas")
+    public List<IdeaDto> ideas() {
+        return catalogQueryService.listIdeasActivas();
+    }
+
+    @GetMapping("/ideas/{slug}")
+    public IdeaDto idea(@PathVariable String slug) {
+        return catalogQueryService.getIdeaBySlug(slug);
+    }
+
+    @GetMapping("/colores")
+    public List<ColorEntity> colores() {
+        return catalogQueryService.listColoresActivos();
+    }
+
+    /** Nombres de diseño activos; el frontend los usa como filtro de categoría. */
     @GetMapping("/product-categories")
     public List<String> productCategories() {
-        Set<String> cats = new LinkedHashSet<>();
-        productRepository.findActive().stream()
-                .sorted(Comparator.comparing(p -> p.category() == null ? "" : p.category()))
-                .forEach(p -> {
-                    if (p.category() != null && !p.category().isBlank()) {
-                        cats.add(p.category());
-                    }
-                });
-        return List.copyOf(cats);
+        return catalogQueryService.listCategorias();
     }
 
+    /** Forma antigua {id, name, hex, available} que aún consume el frontend. */
     @GetMapping("/colors")
-    public List<Color> colors() {
-        return catalogAdminUseCase.listColors().stream()
-                .filter(Color::available)
-                .toList();
+    public List<LegacyColorDto> colors() {
+        return catalogQueryService.listColoresActivosLegacy();
     }
 }

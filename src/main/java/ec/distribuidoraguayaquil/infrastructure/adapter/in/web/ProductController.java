@@ -1,56 +1,64 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
-import ec.distribuidoraguayaquil.domain.model.Product;
-import ec.distribuidoraguayaquil.domain.port.in.ProductUseCase;
+import ec.distribuidoraguayaquil.application.service.CatalogQueryService;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductCardDto;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
+/**
+ * Tarjetas de producto del storefront. Cada tarjeta es una variante del catálogo nuevo,
+ * por lo que el alta/baja/modificación se hace en /api/admin/catalog/variantes.
+ */
 @RestController
 @RequestMapping("/api/products")
+@RequiredArgsConstructor
 public class ProductController {
 
-    private final ProductUseCase productUseCase;
+    private static final String CRUD_MOVED =
+            "El CRUD de productos se gestiona en /api/admin/catalog/variantes (y /precios, /variante-imagenes)";
 
-    public ProductController(ProductUseCase productUseCase) {
-        this.productUseCase = productUseCase;
-    }
+    private final CatalogQueryService catalogQueryService;
 
     @GetMapping
-    public List<Product> list(@RequestParam(defaultValue = "false") boolean top) {
-        return productUseCase.listPublic(top);
-    }
-
-    @GetMapping("/{ref}")
-    public Product byRef(@PathVariable String ref) {
-        return productUseCase.getByRef(ref);
+    public List<ProductCardDto> list(
+            @RequestParam(defaultValue = "false") boolean top,
+            @RequestParam(required = false) String design) {
+        return catalogQueryService.listProductCards(top, design, false);
     }
 
     @GetMapping("/admin/all")
-    public List<Product> listAllAdmin() {
-        return productUseCase.listAll();
+    public List<ProductCardDto> listAllAdmin(@RequestParam(required = false) String design) {
+        return catalogQueryService.listProductCards(false, design, true);
+    }
+
+    @GetMapping("/{ref}")
+    public ProductCardDto byRef(@PathVariable String ref) {
+        return catalogQueryService.getProductCardBySku(ref);
     }
 
     @PostMapping
-    public Product create(@RequestBody Product product) {
-        return productUseCase.create(product);
+    public void create() {
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, CRUD_MOVED);
     }
 
     @PutMapping("/{id}")
-    public Product update(@PathVariable String id, @RequestBody Product product) {
-        return productUseCase.update(id, product);
+    public void update(@PathVariable String id) {
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, CRUD_MOVED);
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) {
-        productUseCase.delete(id);
+        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, CRUD_MOVED);
     }
 }

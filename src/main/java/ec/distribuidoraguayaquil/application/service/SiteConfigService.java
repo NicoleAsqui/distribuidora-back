@@ -22,8 +22,8 @@ public class SiteConfigService implements SiteConfigUseCase {
                 "593983867216",
                 "jeymyunica@hotmail.com",
                 14,
-                "https://maps.app.goo.gl/be8zucedcysfhB598",
-                "https://www.google.com/maps?q=Guayaquil,Ecuador&output=embed"
+                "https://maps.app.goo.gl/tnnQgcCEQ1Y9raVM6",
+                "https://www.google.com/maps?q=Francisco+J%C3%A1come+Mz+278+Villa+1,+Florida+Norte,+Guayaquil,+Ecuador&output=embed"
         ));
     }
 
