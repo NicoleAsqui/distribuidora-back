@@ -379,6 +379,90 @@ public class NewCatalogAdminService {
         e.setOrden(nvl(body.getOrden(), 0));
     }
 
+    // ------------------------------------------------------------- papeles-forro
+
+    @Transactional(readOnly = true)
+    public List<PapelForroEntity> listPapelesForro() {
+        return papelForroRepository.findAllByOrderByOrdenAscNombreAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public PapelForroEntity getPapelForro(Long id) {
+        return find(papelForroRepository, id, "Papel forro");
+    }
+
+    public PapelForroEntity createPapelForro(PapelForroEntity body) {
+        PapelForroEntity e = new PapelForroEntity();
+        applyPapelForro(e, body);
+        return papelForroRepository.save(e);
+    }
+
+    public PapelForroEntity updatePapelForro(Long id, PapelForroEntity body) {
+        PapelForroEntity e = find(papelForroRepository, id, "Papel forro");
+        applyPapelForro(e, body);
+        return papelForroRepository.save(e);
+    }
+
+    public void deletePapelForro(Long id) {
+        delete(papelForroRepository, id, "Papel forro");
+    }
+
+    private void applyPapelForro(PapelForroEntity e, PapelForroEntity body) {
+        e.setFamilia(required(body.getFamilia(), "familia"));
+        e.setNombre(required(body.getNombre(), "nombre"));
+        e.setMedidas(trimToNull(body.getMedidas()));
+        e.setGramajes(trimToNull(body.getGramajes()));
+        e.setImagenUrl(trimToNull(body.getImagenUrl()));
+        e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
+        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+        e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
+    }
+
+    // ------------------------------------------------------------------ viniles
+
+    @Transactional(readOnly = true)
+    public List<VinilEntity> listViniles() {
+        return vinilRepository.findAllByOrderByOrdenAscNombreAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public VinilEntity getVinil(Long id) {
+        return find(vinilRepository, id, "Vinil");
+    }
+
+    public VinilEntity createVinil(VinilEntity body) {
+        VinilEntity e = new VinilEntity();
+        applyVinil(e, body);
+        return vinilRepository.save(e);
+    }
+
+    public VinilEntity updateVinil(Long id, VinilEntity body) {
+        VinilEntity e = find(vinilRepository, id, "Vinil");
+        applyVinil(e, body);
+        return vinilRepository.save(e);
+    }
+
+    public void deleteVinil(Long id) {
+        delete(vinilRepository, id, "Vinil");
+    }
+
+    private void applyVinil(VinilEntity e, VinilEntity body) {
+        String tipo = required(body.getTipo(), "tipo").toLowerCase(Locale.ROOT);
+        if (!tipo.equals("mate") && !tipo.equals("brillante") && !tipo.equals("impreso")) {
+            throw badRequest("tipo de vinil inválido (use mate, brillante o impreso)");
+        }
+        e.setTipo(tipo);
+        e.setNombre(required(body.getNombre(), "nombre"));
+        e.setCodigoHex(trimToNull(body.getCodigoHex()));
+        e.setImagenUrl(trimToNull(body.getImagenUrl()));
+        e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
+        boolean requiereArte = Boolean.TRUE.equals(body.getRequiereArte()) || "impreso".equals(tipo);
+        e.setRequiereArte(requiereArte);
+        e.setPrecioRef(body.getPrecioRef());
+        e.setUnidadPrecio(trimToNull(body.getUnidadPrecio()));
+        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+        e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
+    }
 
     // ----------------------------------------------------------------- gramajes
 
