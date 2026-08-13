@@ -2,6 +2,7 @@ package ec.distribuidoraguayaquil.application.service;
 
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductCardDto;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductPageDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductVariantDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
@@ -24,6 +25,8 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,11 +34,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -96,112 +101,156 @@ public class CatalogQueryService {
     }
 
     public List<IdeaDto> listIdeasActivas() {
-        return toIdeaDtos(ideaRepository.findByActivoTrueOrderByOrdenAscIdAsc());
+        return toIdeaDtos(ideaRepository.findByActivoTrueOrderByOrdenAscIdAsc(), false);
     }
 
     public List<IdeaDto> listIdeas() {
-        return toIdeaDtos(ideaRepository.findAllByOrderByOrdenAscIdAsc());
+        return toIdeaDtos(ideaRepository.findAllByOrderByOrdenAscIdAsc(), false);
     }
 
     public IdeaDto getIdeaBySlug(String slug) {
         IdeaEntity idea = ideaRepository.findBySlug(slug)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Idea no encontrada: " + slug));
-        return toIdeaDtos(List.of(idea)).getFirst();
+        return toIdeaDtos(List.of(idea), true).getFirst();
     }
 
     /**
-     * @param onlyTop        limita a las primeras {@value #TOP_LIMIT} por orden de diseño
-     * @param designSlug     filtra por {@code disenos.slug} (opcional)
-     * @param ideaSlug       filtra por variantes vinculadas a la idea (opcional)
+     * @param onlyTop         limita a las primeras {@value #TOP_LIMIT} por orden de diseño
+     * @param designSlug      filtra por {@code disenos.slug} (opcional)
+     * @param ideaSlug        filtra por variantes vinculadas a la idea (opcional)
      * @param includeInactive incluye variantes inactivas (uso admin)
+     * @param q               búsqueda libre por SKU / diseño (opcional)
+     * @param page            página 0-based
+     * @param size            tamaño de página (1..100); con onlyTop se ignora
      */
+    public ProductPageDto listProductCardsPage(boolean onlyTop, String designSlug, String ideaSlug,
+                                               boolean includeInactive, String q, int page, int size) {
+        int safeSize = onlyTop ? TOP_LIMIT : Math.min(100, Math.max(1, size));
+        int safePage = onlyTop ? 0 : Math.max(0, page);
+        String term = q == null ? "" : q.trim();
+        boolean qBlank = term.isBlank();
+
+        Long disenoId = null;
+        if (designSlug != null && !designSlug.isBlank()) {
+            disenoId = designIdFromSlug(designSlug);
+            if (disenoId == null) {
+                return ProductPageDto.empty(safePage, safeSize);
+            }
+        }
+
+        // Ideas: paginar IDs (barato) y solo hidratar la página.
+        if (ideaSlug != null && !ideaSlug.isBlank()) {
+            Set<Long> ordered = ideaVarianteOrder(ideaSlug);
+            if (ordered == null || ordered.isEmpty()) {
+                return ProductPageDto.empty(safePage, safeSize);
+            }
+            List<Long> orderedIds = List.copyOf(ordered);
+            List<Long> matchedIds = varianteRepository.filterIdsByQuery(
+                    orderedIds, includeInactive, disenoId, term, qBlank);
+            Set<Long> matchedSet = new HashSet<>(matchedIds);
+            List<Long> orderedMatched = orderedIds.stream().filter(matchedSet::contains).toList();
+            if (onlyTop && orderedMatched.size() > TOP_LIMIT) {
+                orderedMatched = orderedMatched.subList(0, TOP_LIMIT);
+            }
+            return pageFromIds(orderedMatched, safePage, safeSize);
+        }
+
+        // Catálogo general: paginación en DB (no carga todas las variantes).
+        Page<VarianteEntity> result = varianteRepository.pageByFilters(
+                includeInactive,
+                disenoId,
+                term,
+                qBlank,
+                PageRequest.of(safePage, safeSize));
+        if (onlyTop) {
+            List<VarianteEntity> content = result.getContent();
+            if (content.size() > TOP_LIMIT) {
+                content = content.subList(0, TOP_LIMIT);
+            }
+            return ProductPageDto.of(hydrateCards(content), 0, TOP_LIMIT, content.size());
+        }
+        return ProductPageDto.of(hydrateCards(result.getContent()), safePage, safeSize, result.getTotalElements());
+    }
+
+    private ProductPageDto pageFromIds(List<Long> orderedIds, int page, int size) {
+        long total = orderedIds.size();
+        if (total == 0) {
+            return ProductPageDto.empty(page, size);
+        }
+        int from = Math.min(page * size, (int) total);
+        if (from >= total) {
+            return ProductPageDto.of(List.of(), page, size, total);
+        }
+        int to = Math.min(from + size, (int) total);
+        List<Long> sliceIds = orderedIds.subList(from, to);
+        Map<Long, VarianteEntity> byId = byId(varianteRepository.findAllById(sliceIds), VarianteEntity::getId);
+        List<VarianteEntity> slice = sliceIds.stream().map(byId::get).filter(Objects::nonNull).toList();
+        return ProductPageDto.of(hydrateCards(slice), page, size, total);
+    }
+
+    /** Compatibilidad: lista completa (admin / top). Preferir {@link #listProductCardsPage}. */
     public List<ProductCardDto> listProductCards(boolean onlyTop, String designSlug, boolean includeInactive) {
         return listProductCards(onlyTop, designSlug, null, includeInactive);
     }
 
     public List<ProductCardDto> listProductCards(boolean onlyTop, String designSlug, String ideaSlug,
                                                  boolean includeInactive) {
-        Long designFilterId = null;
-        if (designSlug != null && !designSlug.isBlank()) {
-            Optional<DisenoEntity> diseno = disenoRepository.findBySlug(designSlug.trim());
-            if (diseno.isEmpty()) {
-                return List.of();
-            }
-            designFilterId = diseno.get().getId();
-        }
+        ProductPageDto page = listProductCardsPage(onlyTop, designSlug, ideaSlug, includeInactive, null, 0,
+                onlyTop ? TOP_LIMIT : 10_000);
+        return page.content();
+    }
 
-        Set<Long> ideaVarianteIds = null;
-        if (ideaSlug != null && !ideaSlug.isBlank()) {
-            Optional<IdeaEntity> idea = ideaRepository.findBySlug(ideaSlug.trim());
-            if (idea.isEmpty() || !Boolean.TRUE.equals(idea.get().getActivo())) {
-                return List.of();
-            }
-            ideaVarianteIds = ideaVarianteRepository.findByIdeaIdOrderByOrdenAscIdAsc(idea.get().getId())
-                    .stream()
-                    .map(IdeaVarianteEntity::getVarianteId)
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-            if (ideaVarianteIds.isEmpty()) {
-                return List.of();
-            }
+    private Long designIdFromSlug(String designSlug) {
+        if (designSlug == null || designSlug.isBlank()) {
+            return null;
         }
+        return disenoRepository.findBySlug(designSlug.trim()).map(DisenoEntity::getId).orElse(null);
+    }
 
-        List<VarianteEntity> variantes = includeInactive
-                ? varianteRepository.findAll()
-                : varianteRepository.findByActivoTrue();
-        if (designFilterId != null) {
-            Long target = designFilterId;
-            variantes = variantes.stream().filter(v -> target.equals(v.getDisenoId())).toList();
+    private Set<Long> ideaVarianteOrder(String ideaSlug) {
+        if (ideaSlug == null || ideaSlug.isBlank()) {
+            return null;
         }
-        if (ideaVarianteIds != null) {
-            Set<Long> allowed = ideaVarianteIds;
-            variantes = variantes.stream().filter(v -> allowed.contains(v.getId())).toList();
-            // respetar orden de la idea cuando no hay filtro de diseño
-            if (designFilterId == null) {
-                Map<Long, Integer> ordenIdea = new HashMap<>();
-                int i = 0;
-                for (Long id : allowed) {
-                    ordenIdea.put(id, i++);
-                }
-                variantes = variantes.stream()
-                        .sorted(Comparator.comparingInt(v -> ordenIdea.getOrDefault(v.getId(), Integer.MAX_VALUE)))
-                        .toList();
-            }
+        Optional<IdeaEntity> idea = ideaRepository.findBySlug(ideaSlug.trim());
+        if (idea.isEmpty() || !Boolean.TRUE.equals(idea.get().getActivo())) {
+            return Set.of();
         }
+        return ideaVarianteRepository.findByIdeaIdOrderByOrdenAscIdAsc(idea.get().getId())
+                .stream()
+                .map(IdeaVarianteEntity::getVarianteId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** Carga precios/imágenes/diseño/medida solo para la página pedida. */
+    private List<ProductCardDto> hydrateCards(List<VarianteEntity> variantes) {
         if (variantes.isEmpty()) {
             return List.of();
         }
-
-        Map<Long, DisenoEntity> disenos = byId(disenoRepository.findAll(), DisenoEntity::getId);
-        Map<Long, MedidaEntity> medidas = byId(medidaRepository.findAll(), MedidaEntity::getId);
+        Collection<Long> ids = ids(variantes);
+        Set<Long> disenoIds = new HashSet<>();
+        Set<Long> medidaIds = new HashSet<>();
+        for (VarianteEntity v : variantes) {
+            if (v.getDisenoId() != null) {
+                disenoIds.add(v.getDisenoId());
+            }
+            if (v.getMedidaId() != null) {
+                medidaIds.add(v.getMedidaId());
+            }
+        }
+        Map<Long, DisenoEntity> disenos = byId(disenoRepository.findAllById(disenoIds), DisenoEntity::getId);
+        Map<Long, MedidaEntity> medidas = byId(medidaRepository.findAllById(medidaIds), MedidaEntity::getId);
         Map<Long, List<PrecioEntity>> precios = groupBy(
-                precioRepository.findByVarianteIdInOrderByCantidadDesdeAsc(ids(variantes)),
+                precioRepository.findByVarianteIdInOrderByCantidadDesdeAsc(ids),
                 PrecioEntity::getVarianteId);
         Map<Long, List<VarianteImagenEntity>> imagenes = groupBy(
-                varianteImagenRepository.findByVarianteIdInOrderByPrincipalDescOrdenAscIdAsc(ids(variantes)),
+                varianteImagenRepository.findByVarianteIdInOrderByPrincipalDescOrdenAscIdAsc(ids),
                 VarianteImagenEntity::getVarianteId);
 
-        List<ProductCardDto> cards;
-        if (ideaVarianteIds != null && designFilterId == null) {
-            cards = variantes.stream()
-                    .map(v -> toCard(v, disenos.get(v.getDisenoId()), medidas.get(v.getMedidaId()),
-                            precios.getOrDefault(v.getId(), List.of()),
-                            imagenes.getOrDefault(v.getId(), List.of())))
-                    .collect(Collectors.toList());
-        } else {
-            cards = variantes.stream()
-                    .sorted(Comparator
-                            .comparingInt((VarianteEntity v) -> ordenDe(disenos.get(v.getDisenoId())))
-                            .thenComparing(VarianteEntity::getId))
-                    .map(v -> toCard(v, disenos.get(v.getDisenoId()), medidas.get(v.getMedidaId()),
-                            precios.getOrDefault(v.getId(), List.of()),
-                            imagenes.getOrDefault(v.getId(), List.of())))
-                    .collect(Collectors.toList());
-        }
-
-        if (onlyTop && cards.size() > TOP_LIMIT) {
-            return List.copyOf(cards.subList(0, TOP_LIMIT));
-        }
-        return cards;
+        return variantes.stream()
+                .map(v -> toCard(v, disenos.get(v.getDisenoId()), medidas.get(v.getMedidaId()),
+                        precios.getOrDefault(v.getId(), List.of()),
+                        imagenes.getOrDefault(v.getId(), List.of())))
+                .toList();
     }
 
     public ProductCardDto getProductCardBySku(String sku) {
@@ -250,7 +299,7 @@ public class CatalogQueryService {
                 variants);
     }
 
-    private List<IdeaDto> toIdeaDtos(List<IdeaEntity> ideas) {
+    private List<IdeaDto> toIdeaDtos(List<IdeaEntity> ideas, boolean includeVariantes) {
         if (ideas.isEmpty()) {
             return List.of();
         }
@@ -258,27 +307,35 @@ public class CatalogQueryService {
         Map<Long, List<IdeaImagenEntity>> imagenes = groupBy(
                 ideaImagenRepository.findByIdeaIdInOrderByPrincipalDescOrdenAscIdAsc(ideaIds),
                 IdeaImagenEntity::getIdeaId);
-        List<IdeaVarianteEntity> enlaces = ideaVarianteRepository.findByIdeaIdInOrderByOrdenAscIdAsc(ideaIds);
-        Map<Long, List<IdeaVarianteEntity>> porIdea = groupBy(enlaces, IdeaVarianteEntity::getIdeaId);
-        Map<Long, String> skus = new HashMap<>();
-        List<Long> varianteIds = enlaces.stream().map(IdeaVarianteEntity::getVarianteId).distinct().toList();
-        if (!varianteIds.isEmpty()) {
-            varianteRepository.findAllById(varianteIds)
-                    .forEach(v -> skus.put(v.getId(), v.getSku()));
+
+        Map<Long, List<IdeaDto.IdeaVarianteDto>> variantesPorIdea = Map.of();
+        if (includeVariantes) {
+            List<IdeaVarianteEntity> enlaces = ideaVarianteRepository.findByIdeaIdInOrderByOrdenAscIdAsc(ideaIds);
+            Map<Long, List<IdeaVarianteEntity>> porIdea = groupBy(enlaces, IdeaVarianteEntity::getIdeaId);
+            Map<Long, String> skus = new HashMap<>();
+            List<Long> varianteIds = enlaces.stream().map(IdeaVarianteEntity::getVarianteId).distinct().toList();
+            if (!varianteIds.isEmpty()) {
+                varianteRepository.findAllById(varianteIds)
+                        .forEach(v -> skus.put(v.getId(), v.getSku()));
+            }
+            variantesPorIdea = new HashMap<>();
+            for (Map.Entry<Long, List<IdeaVarianteEntity>> e : porIdea.entrySet()) {
+                variantesPorIdea.put(e.getKey(), e.getValue().stream()
+                        .map(iv -> new IdeaDto.IdeaVarianteDto(iv.getId(), iv.getVarianteId(),
+                                skus.get(iv.getVarianteId()), iv.getTitulo(), iv.getDescripcion(), iv.getOrden()))
+                        .toList());
+            }
         }
 
+        Map<Long, List<IdeaDto.IdeaVarianteDto>> variantesFinal = variantesPorIdea;
         return ideas.stream().map(idea -> {
             List<IdeaImagenEntity> imgs = imagenes.getOrDefault(idea.getId(), List.of());
-            List<IdeaDto.IdeaVarianteDto> variantes = porIdea.getOrDefault(idea.getId(), List.of()).stream()
-                    .map(iv -> new IdeaDto.IdeaVarianteDto(iv.getId(), iv.getVarianteId(),
-                            skus.get(iv.getVarianteId()), iv.getTitulo(), iv.getDescripcion(), iv.getOrden()))
-                    .toList();
             return new IdeaDto(
                     idea.getId(), idea.getNombre(), idea.getSlug(), idea.getDescripcion(),
                     idea.getActivo(), idea.getOrden(),
                     imgs.isEmpty() ? null : imgs.getFirst().getUrl(),
                     imgs.stream().map(IdeaImagenEntity::getUrl).toList(),
-                    variantes);
+                    variantesFinal.getOrDefault(idea.getId(), List.of()));
         }).toList();
     }
 
@@ -298,13 +355,6 @@ public class CatalogQueryService {
     private static boolean esDestacado(DisenoEntity diseno) {
         Integer orden = diseno.getOrden();
         return orden != null && orden >= 1 && orden <= TOP_ORDEN_MAX;
-    }
-
-    private static int ordenDe(DisenoEntity diseno) {
-        if (diseno == null || diseno.getOrden() == null) {
-            return Integer.MAX_VALUE;
-        }
-        return diseno.getOrden();
     }
 
     private static BigDecimal nvl(BigDecimal value) {

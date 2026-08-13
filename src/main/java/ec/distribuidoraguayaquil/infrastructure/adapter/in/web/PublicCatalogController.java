@@ -6,6 +6,8 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** Lecturas públicas del catálogo (sin autenticación). */
 @RestController
@@ -23,13 +26,17 @@ public class PublicCatalogController {
     private final CatalogQueryService catalogQueryService;
 
     @GetMapping("/disenos")
-    public List<DisenoEntity> disenos() {
-        return catalogQueryService.listDisenosActivos();
+    public ResponseEntity<List<DisenoEntity>> disenos() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
+                .body(catalogQueryService.listDisenosActivos());
     }
 
     @GetMapping("/ideas")
-    public List<IdeaDto> ideas() {
-        return catalogQueryService.listIdeasActivas();
+    public ResponseEntity<List<IdeaDto>> ideas() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(2, TimeUnit.MINUTES).cachePublic())
+                .body(catalogQueryService.listIdeasActivas());
     }
 
     @GetMapping("/ideas/{slug}")
