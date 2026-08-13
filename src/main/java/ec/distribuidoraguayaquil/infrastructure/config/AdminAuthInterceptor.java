@@ -44,6 +44,10 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
             if (HttpMethod.POST.matches(method) && path.equals("/api/uploads/quote-art")) {
                 return false;
             }
+            // PDF de cotización checkout: público
+            if (HttpMethod.POST.matches(method) && path.equals("/api/uploads/quote-pdf")) {
+                return false;
+            }
             return true;
         }
         if (path.startsWith("/api/admin/")) {
@@ -66,6 +70,9 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
                 return false;
             }
             if (HttpMethod.GET.matches(method) && path.startsWith("/api/orders/public/")) {
+                return false;
+            }
+            if (HttpMethod.PUT.matches(method) && path.matches("/api/orders/public/[^/]+/pdf")) {
                 return false;
             }
             return true;

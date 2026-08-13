@@ -8,6 +8,8 @@ import ec.distribuidoraguayaquil.domain.port.out.OrderRepositoryPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -18,9 +20,11 @@ import java.util.UUID;
 public class OrderService implements OrderUseCase {
 
     private final OrderRepositoryPort repository;
+    private final ObjectMapper objectMapper;
 
-    public OrderService(OrderRepositoryPort repository) {
+    public OrderService(OrderRepositoryPort repository, ObjectMapper objectMapper) {
         this.repository = repository;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -70,5 +74,34 @@ public class OrderService implements OrderUseCase {
                 existing.id(), existing.code(), existing.clientName(), existing.clientEmail(),
                 existing.clientPhone(), existing.notes(), existing.checkoutJson(), existing.items(),
                 existing.total(), status, existing.createdAt()));
+    }
+
+    @Override
+    public Order attachPdfUrl(String code, String pdfUrl) {
+        if (pdfUrl == null || pdfUrl.isBlank() || !pdfUrl.startsWith("https://")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pdfUrl inválida");
+        }
+        Order existing = getByCode(code);
+        String merged = mergePdfUrl(existing.checkoutJson(), pdfUrl.trim());
+        return repository.save(new Order(
+                existing.id(), existing.code(), existing.clientName(), existing.clientEmail(),
+                existing.clientPhone(), existing.notes(), merged, existing.items(),
+                existing.total(), existing.status(), existing.createdAt()));
+    }
+
+    private String mergePdfUrl(String checkoutJson, String pdfUrl) {
+        try {
+            ObjectNode node;
+            if (checkoutJson == null || checkoutJson.isBlank()) {
+                node = objectMapper.createObjectNode();
+            } else {
+                var tree = objectMapper.readTree(checkoutJson);
+                node = tree.isObject() ? (ObjectNode) tree : objectMapper.createObjectNode();
+            }
+            node.put("pdfUrl", pdfUrl);
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "checkoutJson inválido");
+        }
     }
 }

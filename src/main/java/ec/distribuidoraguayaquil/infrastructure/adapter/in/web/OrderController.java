@@ -3,6 +3,7 @@ package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 import ec.distribuidoraguayaquil.domain.model.Order;
 import ec.distribuidoraguayaquil.domain.model.OrderItem;
 import ec.distribuidoraguayaquil.domain.port.in.OrderUseCase;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.AttachOrderPdfRequest;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.CreateOrderRequest;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.StatusUpdateRequest;
 import jakarta.validation.Valid;
@@ -35,6 +36,12 @@ public class OrderController {
     @GetMapping("/public/{code}")
     public Order getPublicByCode(@PathVariable String code) {
         return orderUseCase.getByCode(code);
+    }
+
+    /** Público: adjunta URL del PDF subido a GCS tras generar la cotización. */
+    @PutMapping("/public/{code}/pdf")
+    public Order attachPdf(@PathVariable String code, @Valid @RequestBody AttachOrderPdfRequest request) {
+        return orderUseCase.attachPdfUrl(code, request.pdfUrl());
     }
 
     @GetMapping("/{id}")

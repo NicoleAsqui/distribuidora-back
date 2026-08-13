@@ -43,7 +43,7 @@ public class QuoteAdminMailService {
             return;
         }
 
-        String subject = "Nueva cotización " + quote.getCode() + " — " + safe(quote.getClientName());
+        String subject = "Cotización " + quote.getCode() + " — " + safe(quote.getClientName());
         try {
             resendEmailService.sendHtml(to, subject, buildHtml(quote));
         } catch (Exception e) {

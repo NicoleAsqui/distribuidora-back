@@ -91,9 +91,62 @@ public class ProductImageUploadService {
         }
     }
 
+    /**
+     * Sube un PDF de cotización (checkout) a GCS. Multipart campo {@code file}.
+     * Respuesta: {@code { url, objectPath }}.
+     */
+    public Map<String, String> uploadPdf(MultipartFile file, String folderOverride) {
+        if (!gcsProperties.isConfigured()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "GCS no configurado: define GCS_BUCKET_NAME");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta el campo multipart \"file\"");
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        boolean looksPdf = contentType.contains("pdf") || name.endsWith(".pdf");
+        if (!looksPdf) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se permiten archivos PDF");
+        }
+        try {
+            byte[] bytes = file.getBytes();
+            if (bytes.length > 12 * 1024 * 1024) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PDF demasiado grande (máx. 12 MB)");
+            }
+            String baseName = sanitizeBaseName(file.getOriginalFilename());
+            if (baseName.isBlank() || "image".equals(baseName)) {
+                baseName = "cotizacion-" + UUID.randomUUID().toString().substring(0, 8);
+            }
+            LocalDate now = LocalDate.now();
+            String root = gcsProperties.getUploadPrefix().replaceAll("/$", "");
+            String folder = (folderOverride == null || folderOverride.isBlank()) ? "cotizaciones" : folderOverride.trim();
+            root = root + "/" + folder.replaceAll("^/+|/+$", "");
+            String objectPath = root + "/" + now.getYear() + "/" + String.format("%02d", now.getMonthValue())
+                    + "/" + baseName + "-" + UUID.randomUUID().toString().substring(0, 8) + ".pdf";
+            BlobInfo info = BlobInfo.newBuilder(gcsProperties.getBucketName(), objectPath)
+                    .setContentType("application/pdf")
+                    .setContentDisposition("inline; filename=\"" + baseName + ".pdf\"")
+                    .setCacheControl(gcsProperties.getCacheControl())
+                    .build();
+            storage.create(info, bytes);
+            String url = gcsProperties.publicBase() + "/" + objectPath;
+            return Map.of("url", url, "objectPath", objectPath);
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "No se pudo subir el PDF: " + e.getMessage(), e);
+        }
+    }
+
     private String putObject(String objectPath, byte[] bytes) {
+        return putObject(objectPath, bytes, "image/jpeg");
+    }
+
+    private String putObject(String objectPath, byte[] bytes, String contentType) {
         BlobInfo info = BlobInfo.newBuilder(gcsProperties.getBucketName(), objectPath)
-                .setContentType("image/jpeg")
+                .setContentType(contentType)
                 .setCacheControl(gcsProperties.getCacheControl())
                 .build();
         storage.create(info, bytes);
