@@ -25,6 +25,10 @@ public class IdeaImagenEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String url;
 
+    /** Miniatura baja calidad para listados; si es null se usa {@link #url}. */
+    @Column(name = "url_thumb", columnDefinition = "TEXT")
+    private String urlThumb;
+
     @Column(nullable = false)
     private Boolean principal = Boolean.FALSE;
 

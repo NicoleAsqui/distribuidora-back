@@ -17,6 +17,15 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
     List<VarianteEntity> findByDisenoIdOrderByIdAsc(Long disenoId);
     List<VarianteEntity> findByDisenoIdAndActivoTrueOrderByIdAsc(Long disenoId);
 
+    long countByActivoTrue();
+
+    @Query("""
+            SELECT v.disenoId, COUNT(v.id) FROM VarianteEntity v
+            WHERE v.activo = TRUE
+            GROUP BY v.disenoId
+            """)
+    List<Object[]> countActiveGroupedByDisenoId();
+
     @Query("""
             SELECT v FROM VarianteEntity v, DisenoEntity d
             WHERE v.disenoId = d.id

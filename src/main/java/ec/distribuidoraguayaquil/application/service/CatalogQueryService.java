@@ -1,5 +1,6 @@
 package ec.distribuidoraguayaquil.application.service;
 
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.CatalogCountsDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductPageDto;
@@ -98,6 +99,43 @@ public class CatalogQueryService {
             }
         }
         return List.copyOf(nombres);
+    }
+
+    /** Conteos de variantes activas por diseño e idea (filtros del menú). */
+    public CatalogCountsDto listCatalogCounts() {
+        long total = varianteRepository.countByActivoTrue();
+        Map<Long, String> disenoSlugs = new HashMap<>();
+        for (DisenoEntity d : disenoRepository.findAll()) {
+            if (d.getSlug() != null) {
+                disenoSlugs.put(d.getId(), d.getSlug());
+            }
+        }
+        Map<String, Long> byDesign = new HashMap<>();
+        for (Object[] row : varianteRepository.countActiveGroupedByDisenoId()) {
+            Long disenoId = (Long) row[0];
+            Long count = (Long) row[1];
+            String slug = disenoSlugs.get(disenoId);
+            if (slug != null) {
+                byDesign.put(slug, count);
+            }
+        }
+
+        Map<Long, String> ideaSlugs = new HashMap<>();
+        for (IdeaEntity i : ideaRepository.findAll()) {
+            if (i.getSlug() != null) {
+                ideaSlugs.put(i.getId(), i.getSlug());
+            }
+        }
+        Map<String, Long> byIdea = new HashMap<>();
+        for (Object[] row : ideaVarianteRepository.countActiveProductsGroupedByIdeaId()) {
+            Long ideaId = (Long) row[0];
+            Long count = (Long) row[1];
+            String slug = ideaSlugs.get(ideaId);
+            if (slug != null) {
+                byIdea.put(slug, count);
+            }
+        }
+        return new CatalogCountsDto(total, byDesign, byIdea);
     }
 
     public List<IdeaDto> listIdeasActivas() {
@@ -275,7 +313,16 @@ public class CatalogQueryService {
         String dims = dims(medida);
         String nombreDiseno = diseno == null ? "" : nullToEmpty(diseno.getNombre());
         String nombre = dims.isEmpty() ? nombreDiseno : (nombreDiseno + " " + dims).trim();
-        String image = imagenes.isEmpty() ? null : imagenes.getFirst().getUrl();
+        String image = null;
+        String imageThumb = null;
+        if (!imagenes.isEmpty()) {
+            VarianteImagenEntity principal = imagenes.getFirst();
+            image = principal.getUrl();
+            imageThumb = principal.getUrlThumb();
+            if (imageThumb == null || imageThumb.isBlank()) {
+                imageThumb = image;
+            }
+        }
 
         List<ProductVariantDto> variants = precios.isEmpty()
                 ? List.of(new ProductVariantDto(dims, "", BigDecimal.ZERO, null))
@@ -295,7 +342,7 @@ public class CatalogQueryService {
                 diseno != null && esDestacado(diseno),
                 Boolean.TRUE.equals(variante.getActivo()),
                 image,
-                image,
+                imageThumb,
                 variants);
     }
 
@@ -330,10 +377,21 @@ public class CatalogQueryService {
         Map<Long, List<IdeaDto.IdeaVarianteDto>> variantesFinal = variantesPorIdea;
         return ideas.stream().map(idea -> {
             List<IdeaImagenEntity> imgs = imagenes.getOrDefault(idea.getId(), List.of());
+            String full = null;
+            String thumb = null;
+            if (!imgs.isEmpty()) {
+                IdeaImagenEntity first = imgs.getFirst();
+                full = first.getUrl();
+                thumb = first.getUrlThumb();
+                if (thumb == null || thumb.isBlank()) {
+                    thumb = full;
+                }
+            }
             return new IdeaDto(
                     idea.getId(), idea.getNombre(), idea.getSlug(), idea.getDescripcion(),
                     idea.getActivo(), idea.getOrden(),
-                    imgs.isEmpty() ? null : imgs.getFirst().getUrl(),
+                    // Listados usan miniatura; detalle puede pedir full vía imagenes[0]
+                    thumb,
                     imgs.stream().map(IdeaImagenEntity::getUrl).toList(),
                     variantesFinal.getOrDefault(idea.getId(), List.of()));
         }).toList();

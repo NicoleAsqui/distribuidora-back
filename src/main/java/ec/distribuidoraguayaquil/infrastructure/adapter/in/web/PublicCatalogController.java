@@ -1,6 +1,7 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.CatalogQueryService;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.CatalogCountsDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
@@ -44,6 +45,13 @@ public class PublicCatalogController {
         return catalogQueryService.getIdeaBySlug(slug);
     }
 
+    /** Totales por diseño / idea para mostrar (n) en filtros. */
+    @GetMapping("/counts")
+    public ResponseEntity<CatalogCountsDto> counts() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS).cachePublic())
+                .body(catalogQueryService.listCatalogCounts());
+    }
 
     /**
      * Papeles de forro (texturas). Solo para cartón forrado en Personaliza.

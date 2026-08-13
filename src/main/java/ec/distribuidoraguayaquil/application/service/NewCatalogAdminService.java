@@ -237,6 +237,8 @@ public class NewCatalogAdminService {
         requireFk(varianteRepository, body.getVarianteId(), "varianteId");
         e.setVarianteId(body.getVarianteId());
         e.setUrl(required(body.getUrl(), "url"));
+        String thumb = body.getUrlThumb();
+        e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
         e.setPrincipal(nvl(body.getPrincipal(), Boolean.FALSE));
         e.setOrden(nvl(body.getOrden(), 0));
     }
@@ -796,6 +798,8 @@ public class NewCatalogAdminService {
         requireFk(ideaRepository, body.getIdeaId(), "ideaId");
         e.setIdeaId(body.getIdeaId());
         e.setUrl(required(body.getUrl(), "url"));
+        String thumb = body.getUrlThumb();
+        e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
         e.setPrincipal(nvl(body.getPrincipal(), Boolean.FALSE));
         e.setOrden(nvl(body.getOrden(), 0));
     }

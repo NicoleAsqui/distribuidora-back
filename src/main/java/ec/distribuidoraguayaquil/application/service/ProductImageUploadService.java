@@ -22,9 +22,10 @@ import java.util.UUID;
 public class ProductImageUploadService {
 
     private static final int FULL_MAX = 1200;
-    private static final int THUMB_MAX = 380;
+    private static final int THUMB_MAX = 280;
     private static final double FULL_QUALITY = 0.82;
-    private static final double THUMB_QUALITY = 0.68;
+    /** Miniatura: calidad mínima para listados (menos peso). */
+    private static final double THUMB_QUALITY = 0.45;
     private static final Set<String> ALLOWED = Set.of(
             "image/jpeg", "image/png", "image/webp", "image/gif"
     );
