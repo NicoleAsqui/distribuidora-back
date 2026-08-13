@@ -33,13 +33,16 @@ public class ProductController {
     @GetMapping
     public List<ProductCardDto> list(
             @RequestParam(defaultValue = "false") boolean top,
-            @RequestParam(required = false) String design) {
-        return catalogQueryService.listProductCards(top, design, false);
+            @RequestParam(required = false) String design,
+            @RequestParam(required = false) String idea) {
+        return catalogQueryService.listProductCards(top, design, idea, false);
     }
 
     @GetMapping("/admin/all")
-    public List<ProductCardDto> listAllAdmin(@RequestParam(required = false) String design) {
-        return catalogQueryService.listProductCards(false, design, true);
+    public List<ProductCardDto> listAllAdmin(
+            @RequestParam(required = false) String design,
+            @RequestParam(required = false) String idea) {
+        return catalogQueryService.listProductCards(false, design, idea, true);
     }
 
     @GetMapping("/{ref}")
