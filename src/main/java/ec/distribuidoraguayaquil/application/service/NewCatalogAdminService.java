@@ -25,6 +25,8 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteTagEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.AtributoRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.AtributoValorRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ColorRepository;
@@ -41,6 +43,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MaterialImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MaterialRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MedidaRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PapelForroRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PrecioRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.TagRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.TipoMaterialRepository;
@@ -50,6 +53,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTagRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -83,6 +87,8 @@ public class NewCatalogAdminService {
     private final MaterialColorRepository materialColorRepository;
     private final ColorRepository colorRepository;
     private final GramajeRepository gramajeRepository;
+    private final PapelForroRepository papelForroRepository;
+    private final VinilRepository vinilRepository;
     private final ComponenteRepository componenteRepository;
     private final VarianteComponenteRepository varianteComponenteRepository;
     private final ConfiguracionInteriorRepository configuracionInteriorRepository;
@@ -411,6 +417,91 @@ public class NewCatalogAdminService {
         e.setNombre(required(body.getNombre(), "nombre"));
         e.setCodigo(body.getCodigo());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+    }
+
+    // ------------------------------------------------------------- papeles-forro
+
+    @Transactional(readOnly = true)
+    public List<PapelForroEntity> listPapelesForro() {
+        return papelForroRepository.findAllByOrderByOrdenAscNombreAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public PapelForroEntity getPapelForro(Long id) {
+        return find(papelForroRepository, id, "Papel forro");
+    }
+
+    public PapelForroEntity createPapelForro(PapelForroEntity body) {
+        PapelForroEntity e = new PapelForroEntity();
+        applyPapelForro(e, body);
+        return papelForroRepository.save(e);
+    }
+
+    public PapelForroEntity updatePapelForro(Long id, PapelForroEntity body) {
+        PapelForroEntity e = find(papelForroRepository, id, "Papel forro");
+        applyPapelForro(e, body);
+        return papelForroRepository.save(e);
+    }
+
+    public void deletePapelForro(Long id) {
+        delete(papelForroRepository, id, "Papel forro");
+    }
+
+    private void applyPapelForro(PapelForroEntity e, PapelForroEntity body) {
+        e.setFamilia(required(body.getFamilia(), "familia"));
+        e.setNombre(required(body.getNombre(), "nombre"));
+        e.setMedidas(trimToNull(body.getMedidas()));
+        e.setGramajes(trimToNull(body.getGramajes()));
+        e.setImagenUrl(trimToNull(body.getImagenUrl()));
+        e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
+        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+        e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
+    }
+
+    // ------------------------------------------------------------------ viniles
+
+    @Transactional(readOnly = true)
+    public List<VinilEntity> listViniles() {
+        return vinilRepository.findAllByOrderByOrdenAscNombreAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public VinilEntity getVinil(Long id) {
+        return find(vinilRepository, id, "Vinil");
+    }
+
+    public VinilEntity createVinil(VinilEntity body) {
+        VinilEntity e = new VinilEntity();
+        applyVinil(e, body);
+        return vinilRepository.save(e);
+    }
+
+    public VinilEntity updateVinil(Long id, VinilEntity body) {
+        VinilEntity e = find(vinilRepository, id, "Vinil");
+        applyVinil(e, body);
+        return vinilRepository.save(e);
+    }
+
+    public void deleteVinil(Long id) {
+        delete(vinilRepository, id, "Vinil");
+    }
+
+    private void applyVinil(VinilEntity e, VinilEntity body) {
+        String tipo = required(body.getTipo(), "tipo").toLowerCase(Locale.ROOT);
+        if (!tipo.equals("mate") && !tipo.equals("brillante") && !tipo.equals("impreso")) {
+            throw badRequest("tipo de vinil inválido (use mate, brillante o impreso)");
+        }
+        e.setTipo(tipo);
+        e.setNombre(required(body.getNombre(), "nombre"));
+        e.setCodigoHex(trimToNull(body.getCodigoHex()));
+        e.setImagenUrl(trimToNull(body.getImagenUrl()));
+        e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
+        boolean requiereArte = Boolean.TRUE.equals(body.getRequiereArte()) || "impreso".equals(tipo);
+        e.setRequiereArte(requiereArte);
+        e.setPrecioRef(body.getPrecioRef());
+        e.setUnidadPrecio(trimToNull(body.getUnidadPrecio()));
+        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+        e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
     }
 
     // ---------------------------------------------------------- material-colores
@@ -956,6 +1047,12 @@ public class NewCatalogAdminService {
 
     private static boolean blank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String t = value.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private static <T> T nvl(T value, T fallback) {

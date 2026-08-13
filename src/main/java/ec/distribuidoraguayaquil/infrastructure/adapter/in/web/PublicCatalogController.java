@@ -5,10 +5,13 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaD
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.LegacyColorDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -39,6 +42,23 @@ public class PublicCatalogController {
     @GetMapping("/colores")
     public List<ColorEntity> colores() {
         return catalogQueryService.listColoresActivos();
+    }
+
+    /**
+     * Papeles de forro (texturas). Solo para cartón forrado en Personaliza.
+     */
+    @GetMapping("/papeles-forro")
+    public List<PapelForroEntity> papelesForro() {
+        return catalogQueryService.listPapelesForroActivos();
+    }
+
+    /**
+     * Vinilos de forro. Opcional {@code ?tipo=mate|brillante|impreso}.
+     * Solo para cartón forrado en Personaliza.
+     */
+    @GetMapping("/viniles")
+    public List<VinilEntity> viniles(@RequestParam(required = false) String tipo) {
+        return catalogQueryService.listVinilesActivos(tipo);
     }
 
     /** Nombres de diseño activos; el frontend los usa como filtro de categoría. */

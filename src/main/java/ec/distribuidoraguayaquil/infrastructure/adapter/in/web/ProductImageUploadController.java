@@ -27,4 +27,19 @@ public class ProductImageUploadController {
     public Map<String, String> uploadProductImage(@RequestParam("image") MultipartFile image) {
         return uploadService.upload(image);
     }
+
+    /**
+     * Arte del cliente para vinil impreso / impresión en Personaliza (público).
+     * Solo imágenes JPEG/PNG/WebP/GIF de buena calidad.
+     */
+    @PostMapping("/quote-art")
+    public Map<String, String> uploadQuoteArt(@RequestParam("image") MultipartFile image) {
+        return uploadService.upload(image, "quote-art");
+    }
+
+    /** Texturas de papel forro (admin). */
+    @PostMapping("/forro-textures")
+    public Map<String, String> uploadForroTexture(@RequestParam("image") MultipartFile image) {
+        return uploadService.upload(image, "forro-textures");
+    }
 }

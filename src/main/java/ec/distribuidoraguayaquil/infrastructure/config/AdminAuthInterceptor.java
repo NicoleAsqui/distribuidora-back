@@ -40,6 +40,10 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
 
     private boolean requiresAuth(String path, String method) {
         if (path.startsWith("/api/uploads/")) {
+            // Arte de cotización (Personaliza / vinil impreso): público
+            if (HttpMethod.POST.matches(method) && path.equals("/api/uploads/quote-art")) {
+                return false;
+            }
             return true;
         }
         if (path.startsWith("/api/admin/")) {

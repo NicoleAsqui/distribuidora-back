@@ -38,6 +38,13 @@ public class ProductImageUploadService {
     }
 
     public Map<String, String> upload(MultipartFile file) {
+        return upload(file, null);
+    }
+
+    /**
+     * @param folderOverride subcarpeta bajo el prefix GCS (ej. {@code quote-art}, {@code forro-textures}).
+     */
+    public Map<String, String> upload(MultipartFile file, String folderOverride) {
         if (!gcsProperties.isConfigured()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "GCS no configurado: define GCS_BUCKET_NAME");
@@ -58,8 +65,11 @@ public class ProductImageUploadService {
 
             String baseName = sanitizeBaseName(file.getOriginalFilename());
             LocalDate now = LocalDate.now();
-            String prefix = gcsProperties.getUploadPrefix().replaceAll("/$", "")
-                    + "/" + now.getYear() + "/" + String.format("%02d", now.getMonthValue());
+            String root = gcsProperties.getUploadPrefix().replaceAll("/$", "");
+            if (folderOverride != null && !folderOverride.isBlank()) {
+                root = root + "/" + folderOverride.trim().replaceAll("^/+|/+$", "");
+            }
+            String prefix = root + "/" + now.getYear() + "/" + String.format("%02d", now.getMonthValue());
             String objectPathFull = prefix + "/" + baseName + ".jpg";
             String objectPathThumb = prefix + "/" + baseName + "-thumb.jpg";
 

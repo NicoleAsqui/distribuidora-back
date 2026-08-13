@@ -6,7 +6,9 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialImagenEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TipoMaterialEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -169,5 +171,59 @@ public class CatalogMaterialsAdminController {
     @DeleteMapping("/gramajes/{id}")
     public void deleteGramaje(@PathVariable Long id) {
         service.deleteGramaje(id);
+    }
+
+    // ------------------------------------------------------------- papeles-forro
+
+    @GetMapping("/papeles-forro")
+    public List<PapelForroEntity> listPapelesForro() {
+        return service.listPapelesForro();
+    }
+
+    @GetMapping("/papeles-forro/{id}")
+    public PapelForroEntity getPapelForro(@PathVariable Long id) {
+        return service.getPapelForro(id);
+    }
+
+    @PostMapping("/papeles-forro")
+    public PapelForroEntity createPapelForro(@RequestBody PapelForroEntity body) {
+        return service.createPapelForro(body);
+    }
+
+    @PutMapping("/papeles-forro/{id}")
+    public PapelForroEntity updatePapelForro(@PathVariable Long id, @RequestBody PapelForroEntity body) {
+        return service.updatePapelForro(id, body);
+    }
+
+    @DeleteMapping("/papeles-forro/{id}")
+    public void deletePapelForro(@PathVariable Long id) {
+        service.deletePapelForro(id);
+    }
+
+    // ------------------------------------------------------------------ viniles
+
+    @GetMapping("/viniles")
+    public List<VinilEntity> listViniles() {
+        return service.listViniles();
+    }
+
+    @GetMapping("/viniles/{id}")
+    public VinilEntity getVinil(@PathVariable Long id) {
+        return service.getVinil(id);
+    }
+
+    @PostMapping("/viniles")
+    public VinilEntity createVinil(@RequestBody VinilEntity body) {
+        return service.createVinil(body);
+    }
+
+    @PutMapping("/viniles/{id}")
+    public VinilEntity updateVinil(@PathVariable Long id, @RequestBody VinilEntity body) {
+        return service.updateVinil(id, body);
+    }
+
+    @DeleteMapping("/viniles/{id}")
+    public void deleteVinil(@PathVariable Long id) {
+        service.deleteVinil(id);
     }
 }

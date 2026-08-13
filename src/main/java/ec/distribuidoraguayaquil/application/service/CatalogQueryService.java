@@ -10,18 +10,22 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaVarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MedidaEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PrecioEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteImagenEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ColorRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaVarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MedidaRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PapelForroRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PrecioRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -60,6 +64,8 @@ public class CatalogQueryService {
     private final PrecioRepository precioRepository;
     private final VarianteImagenRepository varianteImagenRepository;
     private final ColorRepository colorRepository;
+    private final PapelForroRepository papelForroRepository;
+    private final VinilRepository vinilRepository;
     private final IdeaRepository ideaRepository;
     private final IdeaImagenRepository ideaImagenRepository;
     private final IdeaVarianteRepository ideaVarianteRepository;
@@ -70,6 +76,18 @@ public class CatalogQueryService {
 
     public List<ColorEntity> listColoresActivos() {
         return colorRepository.findByActivoTrueOrderByNombreAsc();
+    }
+
+    public List<PapelForroEntity> listPapelesForroActivos() {
+        return papelForroRepository.findByActivoTrueOrderByOrdenAscNombreAsc();
+    }
+
+    public List<VinilEntity> listVinilesActivos(String tipo) {
+        if (tipo == null || tipo.isBlank()) {
+            return vinilRepository.findByActivoTrueOrderByOrdenAscNombreAsc();
+        }
+        String t = tipo.trim().toLowerCase();
+        return vinilRepository.findByActivoTrueAndTipoOrderByOrdenAscNombreAsc(t);
     }
 
     public List<LegacyColorDto> listColoresActivosLegacy() {
