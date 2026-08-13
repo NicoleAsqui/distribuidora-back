@@ -2,8 +2,6 @@ package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.CatalogQueryService;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
-import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.LegacyColorDto;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
@@ -39,10 +37,6 @@ public class PublicCatalogController {
         return catalogQueryService.getIdeaBySlug(slug);
     }
 
-    @GetMapping("/colores")
-    public List<ColorEntity> colores() {
-        return catalogQueryService.listColoresActivos();
-    }
 
     /**
      * Papeles de forro (texturas). Solo para cartón forrado en Personaliza.
@@ -67,9 +61,4 @@ public class PublicCatalogController {
         return catalogQueryService.listCategorias();
     }
 
-    /** Forma antigua {id, name, hex, available} que aún consume el frontend. */
-    @GetMapping("/colors")
-    public List<LegacyColorDto> colors() {
-        return catalogQueryService.listColoresActivosLegacy();
-    }
 }

@@ -1,9 +1,7 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.NewCatalogAdminService;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.GramajeEntity;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
@@ -22,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** Administración de materiales, colores y gramajes del catálogo nuevo. */
+/** Administración de materiales, gramajes, papeles de forro y vinilos. */
 @RestController
 @RequestMapping("/api/admin/catalog")
 @RequiredArgsConstructor
@@ -102,49 +100,6 @@ public class CatalogMaterialsAdminController {
         service.deleteMaterialImagen(id);
     }
 
-    // ------------------------------------------------------------------ colores
-
-    @GetMapping("/colores")
-    public List<ColorEntity> listColores() {
-        return service.listColores();
-    }
-
-    @GetMapping("/colores/{id}")
-    public ColorEntity getColor(@PathVariable Long id) {
-        return service.getColor(id);
-    }
-
-    @PostMapping("/colores")
-    public ColorEntity createColor(@RequestBody ColorEntity body) {
-        return service.createColor(body);
-    }
-
-    @PutMapping("/colores/{id}")
-    public ColorEntity updateColor(@PathVariable Long id, @RequestBody ColorEntity body) {
-        return service.updateColor(id, body);
-    }
-
-    @DeleteMapping("/colores/{id}")
-    public void deleteColor(@PathVariable Long id) {
-        service.deleteColor(id);
-    }
-
-    // --------------------------------------------------------- material-colores
-
-    @GetMapping("/material-colores")
-    public List<MaterialColorEntity> listMaterialColores(@RequestParam(required = false) Long materialId) {
-        return service.listMaterialColores(materialId);
-    }
-
-    @PostMapping("/material-colores")
-    public MaterialColorEntity createMaterialColor(@RequestBody MaterialColorEntity body) {
-        return service.createMaterialColor(body);
-    }
-
-    @DeleteMapping("/material-colores/{materialId}/{colorId}")
-    public void deleteMaterialColor(@PathVariable Long materialId, @PathVariable Long colorId) {
-        service.deleteMaterialColor(materialId, colorId);
-    }
 
     // ----------------------------------------------------------------- gramajes
 

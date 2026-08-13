@@ -33,9 +33,6 @@ public class VarianteComponenteEntity {
     @Column(name = "gramaje_id")
     private Long gramajeId;
 
-    @Column(name = "color_id")
-    private Long colorId;
-
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal cantidad = BigDecimal.ONE;
 }

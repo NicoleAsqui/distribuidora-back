@@ -1,10 +1,8 @@
 package ec.distribuidoraguayaquil.application.service;
 
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
-import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.LegacyColorDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductVariantDto;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
@@ -15,7 +13,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ColorRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaRepository;
@@ -63,7 +60,6 @@ public class CatalogQueryService {
     private final VarianteRepository varianteRepository;
     private final PrecioRepository precioRepository;
     private final VarianteImagenRepository varianteImagenRepository;
-    private final ColorRepository colorRepository;
     private final PapelForroRepository papelForroRepository;
     private final VinilRepository vinilRepository;
     private final IdeaRepository ideaRepository;
@@ -74,9 +70,6 @@ public class CatalogQueryService {
         return disenoRepository.findByActivoTrueOrderByOrdenAscIdAsc();
     }
 
-    public List<ColorEntity> listColoresActivos() {
-        return colorRepository.findByActivoTrueOrderByNombreAsc();
-    }
 
     public List<PapelForroEntity> listPapelesForroActivos() {
         return papelForroRepository.findByActivoTrueOrderByOrdenAscNombreAsc();
@@ -90,15 +83,6 @@ public class CatalogQueryService {
         return vinilRepository.findByActivoTrueAndTipoOrderByOrdenAscNombreAsc(t);
     }
 
-    public List<LegacyColorDto> listColoresActivosLegacy() {
-        return listColoresActivos().stream()
-                .map(c -> new LegacyColorDto(
-                        String.valueOf(c.getId()),
-                        c.getNombre(),
-                        c.getCodigo(),
-                        Boolean.TRUE.equals(c.getActivo())))
-                .toList();
-    }
 
     /** Nombres de diseño activos: el frontend los usa como categorías/filtros. */
     public List<String> listCategorias() {

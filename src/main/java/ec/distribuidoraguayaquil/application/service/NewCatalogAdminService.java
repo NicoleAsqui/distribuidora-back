@@ -2,7 +2,6 @@ package ec.distribuidoraguayaquil.application.service;
 
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.AtributoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.AtributoValorEntity;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ComponenteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ConfiguracionInteriorDetalleEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ConfiguracionInteriorEntity;
@@ -12,7 +11,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaVarianteEntity;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialColorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MedidaEntity;
@@ -29,7 +27,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.AtributoRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.AtributoValorRepository;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ColorRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ComponenteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ConfiguracionInteriorDetalleRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ConfiguracionInteriorRepository;
@@ -39,7 +36,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaVarianteRepository;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MaterialColorRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MaterialImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MaterialRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.MedidaRepository;
@@ -84,8 +80,6 @@ public class NewCatalogAdminService {
     private final TipoMaterialRepository tipoMaterialRepository;
     private final MaterialRepository materialRepository;
     private final MaterialImagenRepository materialImagenRepository;
-    private final MaterialColorRepository materialColorRepository;
-    private final ColorRepository colorRepository;
     private final GramajeRepository gramajeRepository;
     private final PapelForroRepository papelForroRepository;
     private final VinilRepository vinilRepository;
@@ -385,150 +379,6 @@ public class NewCatalogAdminService {
         e.setOrden(nvl(body.getOrden(), 0));
     }
 
-    // ------------------------------------------------------------------ colores
-
-    @Transactional(readOnly = true)
-    public List<ColorEntity> listColores() {
-        return colorRepository.findAllByOrderByNombreAsc();
-    }
-
-    @Transactional(readOnly = true)
-    public ColorEntity getColor(Long id) {
-        return find(colorRepository, id, "Color");
-    }
-
-    public ColorEntity createColor(ColorEntity body) {
-        ColorEntity e = new ColorEntity();
-        applyColor(e, body);
-        return colorRepository.save(e);
-    }
-
-    public ColorEntity updateColor(Long id, ColorEntity body) {
-        ColorEntity e = find(colorRepository, id, "Color");
-        applyColor(e, body);
-        return colorRepository.save(e);
-    }
-
-    public void deleteColor(Long id) {
-        delete(colorRepository, id, "Color");
-    }
-
-    private void applyColor(ColorEntity e, ColorEntity body) {
-        e.setNombre(required(body.getNombre(), "nombre"));
-        e.setCodigo(body.getCodigo());
-        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
-    }
-
-    // ------------------------------------------------------------- papeles-forro
-
-    @Transactional(readOnly = true)
-    public List<PapelForroEntity> listPapelesForro() {
-        return papelForroRepository.findAllByOrderByOrdenAscNombreAsc();
-    }
-
-    @Transactional(readOnly = true)
-    public PapelForroEntity getPapelForro(Long id) {
-        return find(papelForroRepository, id, "Papel forro");
-    }
-
-    public PapelForroEntity createPapelForro(PapelForroEntity body) {
-        PapelForroEntity e = new PapelForroEntity();
-        applyPapelForro(e, body);
-        return papelForroRepository.save(e);
-    }
-
-    public PapelForroEntity updatePapelForro(Long id, PapelForroEntity body) {
-        PapelForroEntity e = find(papelForroRepository, id, "Papel forro");
-        applyPapelForro(e, body);
-        return papelForroRepository.save(e);
-    }
-
-    public void deletePapelForro(Long id) {
-        delete(papelForroRepository, id, "Papel forro");
-    }
-
-    private void applyPapelForro(PapelForroEntity e, PapelForroEntity body) {
-        e.setFamilia(required(body.getFamilia(), "familia"));
-        e.setNombre(required(body.getNombre(), "nombre"));
-        e.setMedidas(trimToNull(body.getMedidas()));
-        e.setGramajes(trimToNull(body.getGramajes()));
-        e.setImagenUrl(trimToNull(body.getImagenUrl()));
-        e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
-        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
-        e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
-    }
-
-    // ------------------------------------------------------------------ viniles
-
-    @Transactional(readOnly = true)
-    public List<VinilEntity> listViniles() {
-        return vinilRepository.findAllByOrderByOrdenAscNombreAsc();
-    }
-
-    @Transactional(readOnly = true)
-    public VinilEntity getVinil(Long id) {
-        return find(vinilRepository, id, "Vinil");
-    }
-
-    public VinilEntity createVinil(VinilEntity body) {
-        VinilEntity e = new VinilEntity();
-        applyVinil(e, body);
-        return vinilRepository.save(e);
-    }
-
-    public VinilEntity updateVinil(Long id, VinilEntity body) {
-        VinilEntity e = find(vinilRepository, id, "Vinil");
-        applyVinil(e, body);
-        return vinilRepository.save(e);
-    }
-
-    public void deleteVinil(Long id) {
-        delete(vinilRepository, id, "Vinil");
-    }
-
-    private void applyVinil(VinilEntity e, VinilEntity body) {
-        String tipo = required(body.getTipo(), "tipo").toLowerCase(Locale.ROOT);
-        if (!tipo.equals("mate") && !tipo.equals("brillante") && !tipo.equals("impreso")) {
-            throw badRequest("tipo de vinil inválido (use mate, brillante o impreso)");
-        }
-        e.setTipo(tipo);
-        e.setNombre(required(body.getNombre(), "nombre"));
-        e.setCodigoHex(trimToNull(body.getCodigoHex()));
-        e.setImagenUrl(trimToNull(body.getImagenUrl()));
-        e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
-        boolean requiereArte = Boolean.TRUE.equals(body.getRequiereArte()) || "impreso".equals(tipo);
-        e.setRequiereArte(requiereArte);
-        e.setPrecioRef(body.getPrecioRef());
-        e.setUnidadPrecio(trimToNull(body.getUnidadPrecio()));
-        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
-        e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
-    }
-
-    // ---------------------------------------------------------- material-colores
-
-    @Transactional(readOnly = true)
-    public List<MaterialColorEntity> listMaterialColores(Long materialId) {
-        return materialId == null
-                ? materialColorRepository.findAll()
-                : materialColorRepository.findByMaterialId(materialId);
-    }
-
-    public MaterialColorEntity createMaterialColor(MaterialColorEntity body) {
-        requireFk(materialRepository, body.getMaterialId(), "materialId");
-        requireFk(colorRepository, body.getColorId(), "colorId");
-        MaterialColorEntity e = new MaterialColorEntity();
-        e.setMaterialId(body.getMaterialId());
-        e.setColorId(body.getColorId());
-        return materialColorRepository.save(e);
-    }
-
-    public void deleteMaterialColor(Long materialId, Long colorId) {
-        MaterialColorEntity.Key key = new MaterialColorEntity.Key(materialId, colorId);
-        if (!materialColorRepository.existsById(key)) {
-            throw notFound("Relación material-color no encontrada");
-        }
-        materialColorRepository.deleteById(key);
-    }
 
     // ----------------------------------------------------------------- gramajes
 
@@ -625,12 +475,10 @@ public class NewCatalogAdminService {
         requireFk(componenteRepository, body.getComponenteId(), "componenteId");
         requireFk(materialRepository, body.getMaterialId(), "materialId");
         optionalFk(gramajeRepository, body.getGramajeId(), "gramajeId");
-        optionalFk(colorRepository, body.getColorId(), "colorId");
         e.setVarianteId(body.getVarianteId());
         e.setComponenteId(body.getComponenteId());
         e.setMaterialId(body.getMaterialId());
         e.setGramajeId(body.getGramajeId());
-        e.setColorId(body.getColorId());
         e.setCantidad(nvl(body.getCantidad(), BigDecimal.ONE));
     }
 
