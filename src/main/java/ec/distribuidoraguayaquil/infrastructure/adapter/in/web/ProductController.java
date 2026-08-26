@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -39,9 +40,13 @@ public class ProductController {
             @RequestParam(required = false) String design,
             @RequestParam(required = false) String idea,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) BigDecimal largo,
+            @RequestParam(required = false) BigDecimal ancho,
+            @RequestParam(required = false) BigDecimal alto,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "24") int size) {
-        ProductPageDto body = catalogQueryService.listProductCardsPage(top, design, idea, false, q, page, size);
+        ProductPageDto body = catalogQueryService.listProductCardsPage(
+                top, design, idea, false, q, largo, ancho, alto, page, size);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(30, TimeUnit.SECONDS).cachePublic().mustRevalidate())
                 .body(body);
@@ -52,9 +57,13 @@ public class ProductController {
             @RequestParam(required = false) String design,
             @RequestParam(required = false) String idea,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) BigDecimal largo,
+            @RequestParam(required = false) BigDecimal ancho,
+            @RequestParam(required = false) BigDecimal alto,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        return catalogQueryService.listProductCardsPage(false, design, idea, true, q, page, size);
+        return catalogQueryService.listProductCardsPage(
+                false, design, idea, true, q, largo, ancho, alto, page, size);
     }
 
     @GetMapping("/{ref}")

@@ -2,8 +2,8 @@ package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.CatalogQueryService;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.CatalogCountsDto;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.DisenoCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import lombok.RequiredArgsConstructor;
@@ -26,11 +26,12 @@ public class PublicCatalogController {
 
     private final CatalogQueryService catalogQueryService;
 
+    /** Modelos (diseños) con foto representativa — galería / carrusel. */
     @GetMapping("/disenos")
-    public ResponseEntity<List<DisenoEntity>> disenos() {
+    public ResponseEntity<List<DisenoCardDto>> disenos() {
         return ResponseEntity.ok()
-                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
-                .body(catalogQueryService.listDisenosActivos());
+                .cacheControl(CacheControl.maxAge(2, TimeUnit.MINUTES).cachePublic())
+                .body(catalogQueryService.listDisenoCards());
     }
 
     @GetMapping("/ideas")

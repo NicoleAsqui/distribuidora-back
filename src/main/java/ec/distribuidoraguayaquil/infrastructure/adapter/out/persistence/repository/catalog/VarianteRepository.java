@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -27,8 +28,9 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
     List<Object[]> countActiveGroupedByDisenoId();
 
     @Query("""
-            SELECT v FROM VarianteEntity v, DisenoEntity d
+            SELECT v FROM VarianteEntity v, DisenoEntity d, MedidaEntity m
             WHERE v.disenoId = d.id
+              AND v.medidaId = m.id
               AND (:includeInactive = TRUE OR v.activo = TRUE)
               AND (:disenoId IS NULL OR v.disenoId = :disenoId)
               AND (
@@ -37,6 +39,9 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
                 OR LOWER(COALESCE(d.nombre, '')) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(COALESCE(d.slug, '')) LIKE LOWER(CONCAT('%', :q, '%'))
               )
+              AND (:largo IS NULL OR m.largo = :largo)
+              AND (:ancho IS NULL OR m.ancho = :ancho)
+              AND (:alto IS NULL OR m.alto = :alto)
             ORDER BY COALESCE(d.orden, 2147483647) ASC, v.id ASC
             """)
     Page<VarianteEntity> pageByFilters(
@@ -44,6 +49,9 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
             @Param("disenoId") Long disenoId,
             @Param("q") String q,
             @Param("qBlank") boolean qBlank,
+            @Param("largo") BigDecimal largo,
+            @Param("ancho") BigDecimal ancho,
+            @Param("alto") BigDecimal alto,
             Pageable pageable);
 
     @Query("""
@@ -58,8 +66,9 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
             @Param("disenoId") Long disenoId);
 
     @Query("""
-            SELECT v.id FROM VarianteEntity v, DisenoEntity d
+            SELECT v.id FROM VarianteEntity v, DisenoEntity d, MedidaEntity m
             WHERE v.disenoId = d.id
+              AND v.medidaId = m.id
               AND v.id IN :ids
               AND (:includeInactive = TRUE OR v.activo = TRUE)
               AND (:disenoId IS NULL OR v.disenoId = :disenoId)
@@ -69,11 +78,17 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
                 OR LOWER(COALESCE(d.nombre, '')) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(COALESCE(d.slug, '')) LIKE LOWER(CONCAT('%', :q, '%'))
               )
+              AND (:largo IS NULL OR m.largo = :largo)
+              AND (:ancho IS NULL OR m.ancho = :ancho)
+              AND (:alto IS NULL OR m.alto = :alto)
             """)
     List<Long> filterIdsByQuery(
             @Param("ids") Collection<Long> ids,
             @Param("includeInactive") boolean includeInactive,
             @Param("disenoId") Long disenoId,
             @Param("q") String q,
-            @Param("qBlank") boolean qBlank);
+            @Param("qBlank") boolean qBlank,
+            @Param("largo") BigDecimal largo,
+            @Param("ancho") BigDecimal ancho,
+            @Param("alto") BigDecimal alto);
 }

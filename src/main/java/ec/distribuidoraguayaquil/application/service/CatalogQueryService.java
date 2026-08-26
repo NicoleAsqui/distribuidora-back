@@ -1,6 +1,7 @@
 package ec.distribuidoraguayaquil.application.service;
 
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.CatalogCountsDto;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.DisenoCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductPageDto;
@@ -74,6 +75,58 @@ public class CatalogQueryService {
 
     public List<DisenoEntity> listDisenosActivos() {
         return disenoRepository.findByActivoTrueOrderByOrdenAscIdAsc();
+    }
+
+    /**
+     * Modelos para galería: nombre + foto representativa (de una variante activa) + # de medidas.
+     */
+    public List<DisenoCardDto> listDisenoCards() {
+        List<DisenoEntity> diseños = listDisenosActivos();
+        if (diseños.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Long> counts = new HashMap<>();
+        for (Object[] row : varianteRepository.countActiveGroupedByDisenoId()) {
+            counts.put((Long) row[0], (Long) row[1]);
+        }
+
+        // Una variante activa por diseño (la de menor id) para tomar su imagen principal.
+        Map<Long, Long> sampleVarianteByDiseno = new HashMap<>();
+        for (VarianteEntity v : varianteRepository.findByActivoTrue()) {
+            if (v.getDisenoId() == null) continue;
+            sampleVarianteByDiseno.merge(v.getDisenoId(), v.getId(), Math::min);
+        }
+
+        Map<Long, VarianteImagenEntity> imageByVariante = new HashMap<>();
+        List<Long> sampleIds = sampleVarianteByDiseno.values().stream().distinct().toList();
+        if (!sampleIds.isEmpty()) {
+            for (VarianteImagenEntity img : varianteImagenRepository
+                    .findByVarianteIdInOrderByPrincipalDescOrdenAscIdAsc(sampleIds)) {
+                imageByVariante.putIfAbsent(img.getVarianteId(), img);
+            }
+        }
+
+        return diseños.stream().map(d -> {
+            long n = counts.getOrDefault(d.getId(), 0L);
+            Long vid = sampleVarianteByDiseno.get(d.getId());
+            VarianteImagenEntity img = vid == null ? null : imageByVariante.get(vid);
+            String full = img == null ? null : img.getUrl();
+            String thumb = img == null ? null : img.getUrlThumb();
+            if (thumb == null || thumb.isBlank()) {
+                thumb = full;
+            }
+            return new DisenoCardDto(
+                    d.getId(),
+                    d.getNombre(),
+                    d.getSlug(),
+                    d.getDescripcion(),
+                    d.getOrden(),
+                    full,
+                    thumb,
+                    n
+            );
+        }).toList();
     }
 
 
@@ -157,16 +210,29 @@ public class CatalogQueryService {
      * @param designSlug      filtra por {@code disenos.slug} (opcional)
      * @param ideaSlug        filtra por variantes vinculadas a la idea (opcional)
      * @param includeInactive incluye variantes inactivas (uso admin)
-     * @param q               búsqueda libre por SKU / diseño (opcional)
+     * @param q               búsqueda por modelo (SKU / nombre de diseño)
+     * @param largoCm         filtro exacto de largo en cm (opcional)
+     * @param anchoCm         filtro exacto de ancho en cm (opcional)
+     * @param altoCm          filtro exacto de alto en cm (opcional)
      * @param page            página 0-based
      * @param size            tamaño de página (1..100); con onlyTop se ignora
      */
     public ProductPageDto listProductCardsPage(boolean onlyTop, String designSlug, String ideaSlug,
                                                boolean includeInactive, String q, int page, int size) {
+        return listProductCardsPage(onlyTop, designSlug, ideaSlug, includeInactive, q, null, null, null, page, size);
+    }
+
+    public ProductPageDto listProductCardsPage(boolean onlyTop, String designSlug, String ideaSlug,
+                                               boolean includeInactive, String q,
+                                               BigDecimal largoCm, BigDecimal anchoCm, BigDecimal altoCm,
+                                               int page, int size) {
         int safeSize = onlyTop ? TOP_LIMIT : Math.min(100, Math.max(1, size));
         int safePage = onlyTop ? 0 : Math.max(0, page);
         String term = q == null ? "" : q.trim();
         boolean qBlank = term.isBlank();
+        BigDecimal largo = normalizeDim(largoCm);
+        BigDecimal ancho = normalizeDim(anchoCm);
+        BigDecimal alto = normalizeDim(altoCm);
 
         Long disenoId = null;
         if (designSlug != null && !designSlug.isBlank()) {
@@ -184,7 +250,7 @@ public class CatalogQueryService {
             }
             List<Long> orderedIds = List.copyOf(ordered);
             List<Long> matchedIds = varianteRepository.filterIdsByQuery(
-                    orderedIds, includeInactive, disenoId, term, qBlank);
+                    orderedIds, includeInactive, disenoId, term, qBlank, largo, ancho, alto);
             Set<Long> matchedSet = new HashSet<>(matchedIds);
             List<Long> orderedMatched = orderedIds.stream().filter(matchedSet::contains).toList();
             if (onlyTop && orderedMatched.size() > TOP_LIMIT) {
@@ -199,6 +265,9 @@ public class CatalogQueryService {
                 disenoId,
                 term,
                 qBlank,
+                largo,
+                ancho,
+                alto,
                 PageRequest.of(safePage, safeSize));
         if (onlyTop) {
             List<VarianteEntity> content = result.getContent();
@@ -208,6 +277,12 @@ public class CatalogQueryService {
             return ProductPageDto.of(hydrateCards(content), 0, TOP_LIMIT, content.size());
         }
         return ProductPageDto.of(hydrateCards(result.getContent()), safePage, safeSize, result.getTotalElements());
+    }
+
+    private static BigDecimal normalizeDim(BigDecimal v) {
+        if (v == null) return null;
+        if (v.compareTo(BigDecimal.ZERO) <= 0) return null;
+        return v.stripTrailingZeros();
     }
 
     private ProductPageDto pageFromIds(List<Long> orderedIds, int page, int size) {
