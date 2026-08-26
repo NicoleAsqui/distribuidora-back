@@ -88,7 +88,10 @@ public class CatalogQueryService {
 
         Map<Long, Long> counts = new HashMap<>();
         for (Object[] row : varianteRepository.countActiveGroupedByDisenoId()) {
-            counts.put((Long) row[0], (Long) row[1]);
+            long disenoId = toLong(row[0]);
+            if (disenoId > 0) {
+                counts.put(disenoId, toLong(row[1]));
+            }
         }
 
         // Una variante activa por diseño (la de menor id) para tomar su imagen principal.
@@ -122,11 +125,39 @@ public class CatalogQueryService {
                     d.getSlug(),
                     d.getDescripcion(),
                     d.getOrden(),
+                    inferSeccion(d),
                     full,
                     thumb,
                     n
             );
         }).toList();
+    }
+
+    /** Familia del catálogo a partir del nombre/slug (sin columna extra). */
+    static String inferSeccion(DisenoEntity d) {
+        String hay = ((d.getSlug() == null ? "" : d.getSlug()) + " "
+                + (d.getNombre() == null ? "" : d.getNombre())).toLowerCase();
+        if (hay.contains("mdf")) {
+            return "mdf";
+        }
+        if (hay.contains("forrad") || hay.contains("caja forrada") || hay.contains("caja-forrada")) {
+            return "carton";
+        }
+        return "cartulina";
+    }
+
+    private static long toLong(Object value) {
+        if (value == null) {
+            return 0L;
+        }
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
     }
 
 
@@ -165,8 +196,8 @@ public class CatalogQueryService {
         }
         Map<String, Long> byDesign = new HashMap<>();
         for (Object[] row : varianteRepository.countActiveGroupedByDisenoId()) {
-            Long disenoId = (Long) row[0];
-            Long count = (Long) row[1];
+            long disenoId = toLong(row[0]);
+            long count = toLong(row[1]);
             String slug = disenoSlugs.get(disenoId);
             if (slug != null) {
                 byDesign.put(slug, count);
@@ -181,8 +212,8 @@ public class CatalogQueryService {
         }
         Map<String, Long> byIdea = new HashMap<>();
         for (Object[] row : ideaVarianteRepository.countActiveProductsGroupedByIdeaId()) {
-            Long ideaId = (Long) row[0];
-            Long count = (Long) row[1];
+            long ideaId = toLong(row[0]);
+            long count = toLong(row[1]);
             String slug = ideaSlugs.get(ideaId);
             if (slug != null) {
                 byIdea.put(slug, count);

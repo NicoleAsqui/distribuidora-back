@@ -7,6 +7,8 @@ public record DisenoCardDto(
         String slug,
         String descripcion,
         Integer orden,
+        /** Familia visual del catálogo: cartulina | mdf | carton */
+        String seccion,
         String image,
         String imageThumb,
         long medidasCount

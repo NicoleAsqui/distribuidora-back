@@ -26,7 +26,7 @@ public class PublicCatalogController {
 
     private final CatalogQueryService catalogQueryService;
 
-    /** Modelos (diseños) con foto representativa — galería / carrusel. */
+    /** Modelos (diseños) con foto representativa — galería por secciones. */
     @GetMapping("/disenos")
     public ResponseEntity<List<DisenoCardDto>> disenos() {
         return ResponseEntity.ok()
