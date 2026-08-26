@@ -1,5 +1,6 @@
 package ec.distribuidoraguayaquil.application.service;
 
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductoAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.AtributoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.AtributoValorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ComponenteEntity;
@@ -60,8 +61,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * CRUD de administración del catálogo nuevo. Las entidades son planas (FKs como Long),
@@ -204,8 +208,198 @@ public class NewCatalogAdminService {
         requireFk(medidaRepository, body.getMedidaId(), "medidaId");
         e.setDisenoId(body.getDisenoId());
         e.setMedidaId(body.getMedidaId());
-        e.setSku(required(body.getSku(), "sku"));
+        String sku = body.getSku() == null ? "" : body.getSku().trim();
+        if (sku.isBlank()) {
+            if (e.getId() == null || e.getSku() == null || e.getSku().isBlank()) {
+                sku = allocateNextDgSku();
+            } else {
+                sku = e.getSku();
+            }
+        }
+        e.setSku(sku);
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+    }
+
+    /** Siguiente SKU del patrón DG-0001, DG-0002, … */
+    public String allocateNextDgSku() {
+        int next = 1;
+        String latest = varianteRepository.findLatestDgSku().orElse(null);
+        if (latest != null && latest.length() > 3) {
+            try {
+                next = Integer.parseInt(latest.substring(3)) + 1;
+            } catch (NumberFormatException ignored) {
+                next = 1;
+            }
+        }
+        String candidate;
+        do {
+            candidate = String.format(Locale.ROOT, "DG-%04d", next);
+            next++;
+        } while (varianteRepository.findBySku(candidate).isPresent());
+        return candidate;
+    }
+
+    // ----------------------------------------------------------- producto ficha
+
+    @Transactional(readOnly = true)
+    public ProductoAdminDto getProducto(Long id) {
+        VarianteEntity v = find(varianteRepository, id, "Producto");
+        return toProductoDto(v);
+    }
+
+    public ProductoAdminDto createProducto(ProductoAdminDto body) {
+        VarianteEntity v = new VarianteEntity();
+        applyVarianteFromProducto(v, body, true);
+        v = varianteRepository.save(v);
+        syncProductoChildren(v.getId(), body);
+        return toProductoDto(v);
+    }
+
+    public ProductoAdminDto updateProducto(Long id, ProductoAdminDto body) {
+        VarianteEntity v = find(varianteRepository, id, "Producto");
+        applyVarianteFromProducto(v, body, false);
+        v = varianteRepository.save(v);
+        syncProductoChildren(v.getId(), body);
+        return toProductoDto(v);
+    }
+
+    private void applyVarianteFromProducto(VarianteEntity e, ProductoAdminDto body, boolean creating) {
+        requireFk(disenoRepository, body.disenoId(), "disenoId");
+        requireFk(medidaRepository, body.medidaId(), "medidaId");
+        e.setDisenoId(body.disenoId());
+        e.setMedidaId(body.medidaId());
+        if (creating) {
+            String sku = body.sku() == null ? "" : body.sku().trim();
+            e.setSku(sku.isBlank() ? allocateNextDgSku() : sku);
+        } else if (e.getSku() == null || e.getSku().isBlank()) {
+            e.setSku(allocateNextDgSku());
+        }
+        // En edición el SKU no se cambia (mantiene el histórico).
+        e.setActivo(nvl(body.activo(), Boolean.TRUE));
+    }
+
+    private void syncProductoChildren(Long varianteId, ProductoAdminDto body) {
+        syncPrecios(varianteId, body.precios() == null ? List.of() : body.precios());
+        syncImagenes(varianteId, body.imagenes() == null ? List.of() : body.imagenes());
+        syncComponentes(varianteId, body.componentes() == null ? List.of() : body.componentes());
+        syncTags(varianteId, body.tagIds() == null ? List.of() : body.tagIds());
+    }
+
+    private void syncPrecios(Long varianteId, List<ProductoAdminDto.PrecioLine> lines) {
+        precioRepository.deleteByVarianteId(varianteId);
+        precioRepository.flush();
+        Set<Integer> seen = new HashSet<>();
+        for (ProductoAdminDto.PrecioLine line : lines) {
+            if (line == null || line.cantidadDesde() == null || line.precio() == null) {
+                continue;
+            }
+            if (line.cantidadDesde() < 1) {
+                throw badRequest("cantidadDesde debe ser mayor a 0");
+            }
+            if (!seen.add(line.cantidadDesde())) {
+                throw badRequest("Cantidad desde duplicada: " + line.cantidadDesde());
+            }
+            if (line.precio().signum() < 0) {
+                throw badRequest("precio no puede ser negativo");
+            }
+            PrecioEntity e = new PrecioEntity();
+            e.setVarianteId(varianteId);
+            e.setCantidadDesde(line.cantidadDesde());
+            e.setPrecio(line.precio());
+            precioRepository.save(e);
+        }
+    }
+
+    private void syncImagenes(Long varianteId, List<ProductoAdminDto.ImagenLine> lines) {
+        varianteImagenRepository.deleteByVarianteId(varianteId);
+        varianteImagenRepository.flush();
+        int i = 0;
+        for (ProductoAdminDto.ImagenLine line : lines) {
+            if (line == null || line.url() == null || line.url().isBlank()) {
+                continue;
+            }
+            VarianteImagenEntity e = new VarianteImagenEntity();
+            e.setVarianteId(varianteId);
+            e.setUrl(line.url().trim());
+            String thumb = line.urlThumb();
+            e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
+            e.setPrincipal(nvl(line.principal(), i == 0));
+            e.setOrden(nvl(line.orden(), i));
+            varianteImagenRepository.save(e);
+            i++;
+        }
+    }
+
+    private void syncComponentes(Long varianteId, List<ProductoAdminDto.ComponenteLine> lines) {
+        varianteComponenteRepository.deleteByVarianteId(varianteId);
+        varianteComponenteRepository.flush();
+        for (ProductoAdminDto.ComponenteLine line : lines) {
+            if (line == null || line.componenteId() == null || line.materialId() == null) {
+                continue;
+            }
+            requireFk(componenteRepository, line.componenteId(), "componenteId");
+            requireFk(materialRepository, line.materialId(), "materialId");
+            if (line.gramajeId() != null) {
+                requireFk(gramajeRepository, line.gramajeId(), "gramajeId");
+            }
+            VarianteComponenteEntity e = new VarianteComponenteEntity();
+            e.setVarianteId(varianteId);
+            e.setComponenteId(line.componenteId());
+            e.setMaterialId(line.materialId());
+            e.setGramajeId(line.gramajeId());
+            e.setCantidad(line.cantidad() == null ? BigDecimal.ONE : line.cantidad());
+            varianteComponenteRepository.save(e);
+        }
+    }
+
+    private void syncTags(Long varianteId, List<Long> tagIds) {
+        varianteTagRepository.deleteByVarianteId(varianteId);
+        varianteTagRepository.flush();
+        Set<Long> seen = new HashSet<>();
+        for (Long tagId : tagIds) {
+            if (tagId == null || !seen.add(tagId)) {
+                continue;
+            }
+            requireFk(tagRepository, tagId, "tagId");
+            VarianteTagEntity e = new VarianteTagEntity();
+            e.setVarianteId(varianteId);
+            e.setTagId(tagId);
+            varianteTagRepository.save(e);
+        }
+    }
+
+    private ProductoAdminDto toProductoDto(VarianteEntity v) {
+        Long id = v.getId();
+        List<ProductoAdminDto.PrecioLine> precios = new ArrayList<>();
+        for (PrecioEntity p : precioRepository.findByVarianteIdOrderByCantidadDesdeAsc(id)) {
+            precios.add(new ProductoAdminDto.PrecioLine(p.getId(), p.getCantidadDesde(), p.getPrecio()));
+        }
+        List<ProductoAdminDto.ImagenLine> imagenes = new ArrayList<>();
+        for (VarianteImagenEntity img : varianteImagenRepository
+                .findByVarianteIdOrderByPrincipalDescOrdenAscIdAsc(id)) {
+            imagenes.add(new ProductoAdminDto.ImagenLine(
+                    img.getId(), img.getUrl(), img.getUrlThumb(), img.getPrincipal(), img.getOrden()));
+        }
+        List<ProductoAdminDto.ComponenteLine> componentes = new ArrayList<>();
+        for (VarianteComponenteEntity c : varianteComponenteRepository.findByVarianteIdOrderByIdAsc(id)) {
+            componentes.add(new ProductoAdminDto.ComponenteLine(
+                    c.getId(), c.getComponenteId(), c.getMaterialId(), c.getGramajeId(), c.getCantidad()));
+        }
+        List<Long> tagIds = new ArrayList<>();
+        for (VarianteTagEntity t : varianteTagRepository.findByVarianteId(id)) {
+            tagIds.add(t.getTagId());
+        }
+        return new ProductoAdminDto(
+                id,
+                v.getDisenoId(),
+                v.getMedidaId(),
+                v.getSku(),
+                v.getActivo(),
+                precios,
+                imagenes,
+                componentes,
+                tagIds
+        );
     }
 
     // -------------------------------------------------------- variante imágenes

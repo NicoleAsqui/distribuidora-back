@@ -20,6 +20,15 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
 
     long countByActivoTrue();
 
+    /** Último SKU del patrón DG-#### (mayor número). */
+    @Query(value = """
+            SELECT sku FROM variantes
+            WHERE sku ~ '^DG-[0-9]+$'
+            ORDER BY CAST(SUBSTRING(sku FROM 4) AS INTEGER) DESC
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<String> findLatestDgSku();
+
     @Query("""
             SELECT v.disenoId, COUNT(v.id) FROM VarianteEntity v
             WHERE v.activo = TRUE

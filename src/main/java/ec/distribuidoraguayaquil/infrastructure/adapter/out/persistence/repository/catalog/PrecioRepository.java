@@ -9,4 +9,5 @@ import java.util.List;
 public interface PrecioRepository extends JpaRepository<PrecioEntity, Long> {
     List<PrecioEntity> findByVarianteIdOrderByCantidadDesdeAsc(Long varianteId);
     List<PrecioEntity> findByVarianteIdInOrderByCantidadDesdeAsc(Collection<Long> varianteIds);
+    void deleteByVarianteId(Long varianteId);
 }

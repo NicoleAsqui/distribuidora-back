@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface VarianteComponenteRepository extends JpaRepository<VarianteComponenteEntity, Long> {
     List<VarianteComponenteEntity> findByVarianteIdOrderByIdAsc(Long varianteId);
+    void deleteByVarianteId(Long varianteId);
 }

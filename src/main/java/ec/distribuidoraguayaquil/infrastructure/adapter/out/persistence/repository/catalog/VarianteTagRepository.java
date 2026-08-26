@@ -10,4 +10,5 @@ public interface VarianteTagRepository extends JpaRepository<VarianteTagEntity, 
     List<VarianteTagEntity> findByVarianteId(Long varianteId);
     List<VarianteTagEntity> findByVarianteIdIn(Collection<Long> varianteIds);
     List<VarianteTagEntity> findByTagId(Long tagId);
+    void deleteByVarianteId(Long varianteId);
 }

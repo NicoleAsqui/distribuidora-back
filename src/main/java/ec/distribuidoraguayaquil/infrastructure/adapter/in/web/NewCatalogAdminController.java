@@ -1,6 +1,7 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.NewCatalogAdminService;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductoAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Administración del catálogo nuevo: diseños, medidas, variantes, precios, ideas y tags.
@@ -114,6 +116,33 @@ public class NewCatalogAdminController {
 
     @DeleteMapping("/variantes/{id}")
     public void deleteVariante(@PathVariable Long id) {
+        service.deleteVariante(id);
+    }
+
+    // ----------------------------------------------------------- productos (ficha)
+
+    @GetMapping("/productos/next-sku")
+    public Map<String, String> nextSku() {
+        return Map.of("sku", service.allocateNextDgSku());
+    }
+
+    @GetMapping("/productos/{id}")
+    public ProductoAdminDto getProducto(@PathVariable Long id) {
+        return service.getProducto(id);
+    }
+
+    @PostMapping("/productos")
+    public ProductoAdminDto createProducto(@RequestBody ProductoAdminDto body) {
+        return service.createProducto(body);
+    }
+
+    @PutMapping("/productos/{id}")
+    public ProductoAdminDto updateProducto(@PathVariable Long id, @RequestBody ProductoAdminDto body) {
+        return service.updateProducto(id, body);
+    }
+
+    @DeleteMapping("/productos/{id}")
+    public void deleteProducto(@PathVariable Long id) {
         service.deleteVariante(id);
     }
 

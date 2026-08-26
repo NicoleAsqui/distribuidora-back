@@ -9,4 +9,5 @@ import java.util.List;
 public interface VarianteImagenRepository extends JpaRepository<VarianteImagenEntity, Long> {
     List<VarianteImagenEntity> findByVarianteIdOrderByPrincipalDescOrdenAscIdAsc(Long varianteId);
     List<VarianteImagenEntity> findByVarianteIdInOrderByPrincipalDescOrdenAscIdAsc(Collection<Long> varianteIds);
+    void deleteByVarianteId(Long varianteId);
 }
