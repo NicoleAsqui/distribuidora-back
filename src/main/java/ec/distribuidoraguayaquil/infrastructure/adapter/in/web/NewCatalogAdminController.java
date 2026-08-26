@@ -1,6 +1,7 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.NewCatalogAdminService;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductoAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
@@ -220,6 +221,28 @@ public class NewCatalogAdminController {
 
     @DeleteMapping("/ideas/{id}")
     public void deleteIdea(@PathVariable Long id) {
+        service.deleteIdea(id);
+    }
+
+    // ----------------------------------------------------------- ideas (ficha)
+
+    @GetMapping("/ideas-ficha/{id}")
+    public IdeaAdminDto getIdeaFicha(@PathVariable Long id) {
+        return service.getIdeaAdmin(id);
+    }
+
+    @PostMapping("/ideas-ficha")
+    public IdeaAdminDto createIdeaFicha(@RequestBody IdeaAdminDto body) {
+        return service.createIdeaAdmin(body);
+    }
+
+    @PutMapping("/ideas-ficha/{id}")
+    public IdeaAdminDto updateIdeaFicha(@PathVariable Long id, @RequestBody IdeaAdminDto body) {
+        return service.updateIdeaAdmin(id, body);
+    }
+
+    @DeleteMapping("/ideas-ficha/{id}")
+    public void deleteIdeaFicha(@PathVariable Long id) {
         service.deleteIdea(id);
     }
 

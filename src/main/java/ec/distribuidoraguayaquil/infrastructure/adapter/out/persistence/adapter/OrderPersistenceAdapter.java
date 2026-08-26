@@ -67,6 +67,11 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
     }
 
     @Override
+    public void deleteById(String id) {
+        repository.deleteById(id);
+    }
+
+    @Override
     public long nextSequence() {
         return 1000 + repository.countAll() + 1;
     }

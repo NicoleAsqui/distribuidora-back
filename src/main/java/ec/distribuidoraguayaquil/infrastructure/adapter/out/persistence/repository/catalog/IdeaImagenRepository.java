@@ -9,4 +9,5 @@ import java.util.List;
 public interface IdeaImagenRepository extends JpaRepository<IdeaImagenEntity, Long> {
     List<IdeaImagenEntity> findByIdeaIdOrderByPrincipalDescOrdenAscIdAsc(Long ideaId);
     List<IdeaImagenEntity> findByIdeaIdInOrderByPrincipalDescOrdenAscIdAsc(Collection<Long> ideaIds);
+    void deleteByIdeaId(Long ideaId);
 }

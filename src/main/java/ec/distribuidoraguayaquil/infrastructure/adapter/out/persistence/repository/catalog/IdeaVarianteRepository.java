@@ -11,6 +11,7 @@ public interface IdeaVarianteRepository extends JpaRepository<IdeaVarianteEntity
     List<IdeaVarianteEntity> findByIdeaIdOrderByOrdenAscIdAsc(Long ideaId);
     List<IdeaVarianteEntity> findByIdeaIdInOrderByOrdenAscIdAsc(Collection<Long> ideaIds);
     List<IdeaVarianteEntity> findByVarianteId(Long varianteId);
+    void deleteByIdeaId(Long ideaId);
 
     @Query("""
             SELECT iv.ideaId, COUNT(iv.id) FROM IdeaVarianteEntity iv, VarianteEntity v, IdeaEntity i

@@ -77,6 +77,12 @@ public class OrderService implements OrderUseCase {
     }
 
     @Override
+    public void delete(String id) {
+        getById(id);
+        repository.deleteById(id);
+    }
+
+    @Override
     public Order attachPdfUrl(String code, String pdfUrl) {
         if (pdfUrl == null || pdfUrl.isBlank() || !pdfUrl.startsWith("https://")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pdfUrl inválida");

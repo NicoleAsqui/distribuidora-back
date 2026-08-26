@@ -11,6 +11,7 @@ public interface OrderUseCase {
     Order getByCode(String code);
     Order create(Order order);
     Order updateStatus(String id, RequestStatus status);
+    void delete(String id);
     /** Adjunta URL del PDF (GCS) al checkoutJson del pedido público. */
     Order attachPdfUrl(String code, String pdfUrl);
 }

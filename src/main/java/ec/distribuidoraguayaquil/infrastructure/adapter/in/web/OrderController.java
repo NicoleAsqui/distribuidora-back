@@ -7,6 +7,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.AttachOrderPd
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.CreateOrderRequest;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.StatusUpdateRequest;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -62,5 +63,10 @@ public class OrderController {
     @PutMapping("/{id}/status")
     public Order updateStatus(@PathVariable String id, @Valid @RequestBody StatusUpdateRequest request) {
         return orderUseCase.updateStatus(id, request.status());
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable String id) {
+        orderUseCase.delete(id);
     }
 }

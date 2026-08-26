@@ -1,5 +1,6 @@
 package ec.distribuidoraguayaquil.application.service;
 
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductoAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.AtributoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.AtributoValorEntity;
@@ -954,6 +955,11 @@ public class NewCatalogAdminService {
     }
 
     public void deleteIdea(Long id) {
+        find(ideaRepository, id, "Idea");
+        ideaImagenRepository.deleteByIdeaId(id);
+        ideaVarianteRepository.deleteByIdeaId(id);
+        ideaImagenRepository.flush();
+        ideaVarianteRepository.flush();
         delete(ideaRepository, id, "Idea");
     }
 
@@ -963,6 +969,111 @@ public class NewCatalogAdminService {
         e.setDescripcion(body.getDescripcion());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
         e.setOrden(nvl(body.getOrden(), 0));
+    }
+
+    // ----------------------------------------------------------- idea ficha
+
+    @Transactional(readOnly = true)
+    public IdeaAdminDto getIdeaAdmin(Long id) {
+        return toIdeaAdminDto(find(ideaRepository, id, "Idea"));
+    }
+
+    public IdeaAdminDto createIdeaAdmin(IdeaAdminDto body) {
+        IdeaEntity e = new IdeaEntity();
+        applyIdeaFromAdmin(e, body);
+        e = ideaRepository.save(e);
+        syncIdeaChildren(e.getId(), body);
+        return toIdeaAdminDto(e);
+    }
+
+    public IdeaAdminDto updateIdeaAdmin(Long id, IdeaAdminDto body) {
+        IdeaEntity e = find(ideaRepository, id, "Idea");
+        applyIdeaFromAdmin(e, body);
+        e = ideaRepository.save(e);
+        syncIdeaChildren(e.getId(), body);
+        return toIdeaAdminDto(e);
+    }
+
+    private void applyIdeaFromAdmin(IdeaEntity e, IdeaAdminDto body) {
+        e.setNombre(required(body.nombre(), "nombre"));
+        String slug = body.slug() == null ? "" : body.slug().trim();
+        e.setSlug(slug.isBlank() ? slugify(e.getNombre()) : slug);
+        e.setDescripcion(body.descripcion());
+        e.setActivo(nvl(body.activo(), Boolean.TRUE));
+        e.setOrden(nvl(body.orden(), 0));
+    }
+
+    private void syncIdeaChildren(Long ideaId, IdeaAdminDto body) {
+        syncIdeaImagenes(ideaId, body.imagenes() == null ? List.of() : body.imagenes());
+        syncIdeaProductos(ideaId, body.productos() == null ? List.of() : body.productos());
+    }
+
+    private void syncIdeaImagenes(Long ideaId, List<IdeaAdminDto.ImagenLine> lines) {
+        ideaImagenRepository.deleteByIdeaId(ideaId);
+        ideaImagenRepository.flush();
+        int i = 0;
+        for (IdeaAdminDto.ImagenLine line : lines) {
+            if (line == null || line.url() == null || line.url().isBlank()) {
+                continue;
+            }
+            IdeaImagenEntity e = new IdeaImagenEntity();
+            e.setIdeaId(ideaId);
+            e.setUrl(line.url().trim());
+            String thumb = line.urlThumb();
+            e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
+            e.setPrincipal(nvl(line.principal(), i == 0));
+            e.setOrden(nvl(line.orden(), i));
+            ideaImagenRepository.save(e);
+            i++;
+        }
+    }
+
+    private void syncIdeaProductos(Long ideaId, List<IdeaAdminDto.ProductoLine> lines) {
+        ideaVarianteRepository.deleteByIdeaId(ideaId);
+        ideaVarianteRepository.flush();
+        Set<Long> seen = new HashSet<>();
+        int i = 0;
+        for (IdeaAdminDto.ProductoLine line : lines) {
+            if (line == null || line.varianteId() == null) {
+                continue;
+            }
+            if (!seen.add(line.varianteId())) {
+                continue;
+            }
+            requireFk(varianteRepository, line.varianteId(), "varianteId");
+            IdeaVarianteEntity e = new IdeaVarianteEntity();
+            e.setIdeaId(ideaId);
+            e.setVarianteId(line.varianteId());
+            e.setTitulo(line.titulo());
+            e.setDescripcion(line.descripcion());
+            e.setOrden(nvl(line.orden(), i));
+            ideaVarianteRepository.save(e);
+            i++;
+        }
+    }
+
+    private IdeaAdminDto toIdeaAdminDto(IdeaEntity idea) {
+        Long id = idea.getId();
+        List<IdeaAdminDto.ImagenLine> imagenes = new ArrayList<>();
+        for (IdeaImagenEntity img : ideaImagenRepository.findByIdeaIdOrderByPrincipalDescOrdenAscIdAsc(id)) {
+            imagenes.add(new IdeaAdminDto.ImagenLine(
+                    img.getId(), img.getUrl(), img.getUrlThumb(), img.getPrincipal(), img.getOrden()));
+        }
+        List<IdeaAdminDto.ProductoLine> productos = new ArrayList<>();
+        for (IdeaVarianteEntity iv : ideaVarianteRepository.findByIdeaIdOrderByOrdenAscIdAsc(id)) {
+            productos.add(new IdeaAdminDto.ProductoLine(
+                    iv.getId(), iv.getVarianteId(), iv.getTitulo(), iv.getDescripcion(), iv.getOrden()));
+        }
+        return new IdeaAdminDto(
+                id,
+                idea.getNombre(),
+                idea.getSlug(),
+                idea.getDescripcion(),
+                idea.getActivo(),
+                idea.getOrden(),
+                imagenes,
+                productos
+        );
     }
 
     @Transactional(readOnly = true)
