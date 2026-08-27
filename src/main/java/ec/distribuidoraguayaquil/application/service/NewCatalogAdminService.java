@@ -137,6 +137,17 @@ public class NewCatalogAdminService {
         e.setDescripcion(body.getDescripcion());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
         e.setOrden(nvl(body.getOrden(), 0));
+        e.setSeccion(normalizeDisenoSeccion(body.getSeccion()));
+    }
+
+    /** acetato | cartulina | mdf | carton */
+    private static String normalizeDisenoSeccion(String raw) {
+        String s = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
+        return switch (s) {
+            case "acetato", "cartulina", "mdf", "carton" -> s;
+            case "" -> "cartulina";
+            default -> throw badRequest("Sección inválida. Usa: acetato, cartulina, mdf o carton");
+        };
     }
 
     // ------------------------------------------------------------------ medidas

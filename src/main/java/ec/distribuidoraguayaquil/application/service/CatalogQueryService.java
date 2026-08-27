@@ -37,6 +37,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -78,7 +79,8 @@ public class CatalogQueryService {
     }
 
     /**
-     * Modelos para galería: nombre + foto representativa (de una variante activa) + # de medidas.
+     * Modelos para galería: nombre + foto representativa + # de medidas.
+     * La sección sale de {@code disenos.seccion}.
      */
     public List<DisenoCardDto> listDisenoCards() {
         List<DisenoEntity> diseños = listDisenosActivos();
@@ -94,7 +96,6 @@ public class CatalogQueryService {
             }
         }
 
-        // Una variante activa por diseño (la de menor id) para tomar su imagen principal.
         Map<Long, Long> sampleVarianteByDiseno = new HashMap<>();
         for (VarianteEntity v : varianteRepository.findByActivoTrue()) {
             if (v.getDisenoId() == null) continue;
@@ -110,7 +111,7 @@ public class CatalogQueryService {
             }
         }
 
-        return diseños.stream().map(d -> {
+        List<DisenoCardDto> cards = diseños.stream().map(d -> {
             long n = counts.getOrDefault(d.getId(), 0L);
             Long vid = sampleVarianteByDiseno.get(d.getId());
             VarianteImagenEntity img = vid == null ? null : imageByVariante.get(vid);
@@ -125,25 +126,40 @@ public class CatalogQueryService {
                     d.getSlug(),
                     d.getDescripcion(),
                     d.getOrden(),
-                    inferSeccion(d),
+                    normalizeProductoSeccion(d.getSeccion()),
                     full,
                     thumb,
                     n
             );
-        }).toList();
+        }).collect(Collectors.toCollection(ArrayList::new));
+
+        cards.sort(Comparator
+                .comparingInt((DisenoCardDto c) -> seccionOrden(c.seccion()))
+                .thenComparingInt(c -> c.orden() == null ? Integer.MAX_VALUE : c.orden())
+                .thenComparing(DisenoCardDto::nombre, Comparator.nullsLast(String::compareToIgnoreCase)));
+        return cards;
     }
 
-    /** Familia del catálogo a partir del nombre/slug (sin columna extra). */
-    static String inferSeccion(DisenoEntity d) {
-        String hay = ((d.getSlug() == null ? "" : d.getSlug()) + " "
-                + (d.getNombre() == null ? "" : d.getNombre())).toLowerCase();
-        if (hay.contains("mdf")) {
-            return "mdf";
+    /** acetato | cartulina | mdf | carton — default cartulina. */
+    static String normalizeProductoSeccion(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "cartulina";
         }
-        if (hay.contains("forrad") || hay.contains("caja forrada") || hay.contains("caja-forrada")) {
-            return "carton";
-        }
-        return "cartulina";
+        String s = raw.trim().toLowerCase();
+        return switch (s) {
+            case "acetato", "cartulina", "mdf", "carton" -> s;
+            default -> "cartulina";
+        };
+    }
+
+    private static int seccionOrden(String seccion) {
+        return switch (normalizeProductoSeccion(seccion)) {
+            case "cartulina" -> 0;
+            case "acetato" -> 1;
+            case "mdf" -> 2;
+            case "carton" -> 3;
+            default -> 9;
+        };
     }
 
     private static long toLong(Object value) {
