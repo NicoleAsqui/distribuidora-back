@@ -2,11 +2,13 @@ package ec.distribuidoraguayaquil.application.service;
 
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.CatalogCountsDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.DisenoCardDto;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.DisenoImagenCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductPageDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductVariantDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaVarianteEntity;
@@ -16,6 +18,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaRepository;
@@ -62,6 +65,7 @@ public class CatalogQueryService {
     private static final int TOP_LIMIT = 8;
 
     private final DisenoRepository disenoRepository;
+    private final DisenoImagenRepository disenoImagenRepository;
     private final MedidaRepository medidaRepository;
     private final VarianteRepository varianteRepository;
     private final PrecioRepository precioRepository;
@@ -109,22 +113,43 @@ public class CatalogQueryService {
             }
         }
 
+        List<Long> disenoIds = diseños.stream().map(DisenoEntity::getId).toList();
+        Map<Long, List<DisenoImagenEntity>> fotosByDiseno = groupBy(
+                disenoImagenRepository.findByDisenoIdInOrderByPrincipalDescOrdenAscIdAsc(disenoIds),
+                DisenoImagenEntity::getDisenoId);
+
         List<DisenoCardDto> cards = diseños.stream().map(d -> {
             long n = counts.getOrDefault(d.getId(), 0L);
-            String full = d.getImagenUrl();
-            String thumb = d.getImagenThumbUrl();
-            if (full == null || full.isBlank()) {
-                Long vid = sampleVarianteByDiseno.get(d.getId());
-                VarianteImagenEntity img = vid == null ? null : imageByVariante.get(vid);
-                full = img == null ? null : img.getUrl();
-                thumb = img == null ? null : img.getUrlThumb();
-            } else {
-                full = full.trim();
-                thumb = thumb == null || thumb.isBlank() ? null : thumb.trim();
+            List<DisenoImagenCardDto> imagenes = new ArrayList<>();
+            for (DisenoImagenEntity img : fotosByDiseno.getOrDefault(d.getId(), List.of())) {
+                String full = img.getUrl();
+                String thumb = img.getUrlThumb();
+                if (thumb == null || thumb.isBlank()) {
+                    thumb = full;
+                }
+                imagenes.add(new DisenoImagenCardDto(full, thumb));
             }
-            if (thumb == null || thumb.isBlank()) {
-                thumb = full;
+            if (imagenes.isEmpty()) {
+                String full = d.getImagenUrl();
+                String thumb = d.getImagenThumbUrl();
+                if (full == null || full.isBlank()) {
+                    Long vid = sampleVarianteByDiseno.get(d.getId());
+                    VarianteImagenEntity img = vid == null ? null : imageByVariante.get(vid);
+                    full = img == null ? null : img.getUrl();
+                    thumb = img == null ? null : img.getUrlThumb();
+                } else {
+                    full = full.trim();
+                    thumb = thumb == null || thumb.isBlank() ? null : thumb.trim();
+                }
+                if (thumb == null || thumb.isBlank()) {
+                    thumb = full;
+                }
+                if (full != null && !full.isBlank()) {
+                    imagenes.add(new DisenoImagenCardDto(full, thumb));
+                }
             }
+            String full = imagenes.isEmpty() ? null : imagenes.getFirst().url();
+            String thumb = imagenes.isEmpty() ? null : imagenes.getFirst().urlThumb();
             return new DisenoCardDto(
                     d.getId(),
                     d.getNombre(),
@@ -134,6 +159,7 @@ public class CatalogQueryService {
                     normalizeProductoSeccion(d.getSeccion()),
                     full,
                     thumb,
+                    imagenes,
                     n
             );
         }).collect(Collectors.toCollection(ArrayList::new));

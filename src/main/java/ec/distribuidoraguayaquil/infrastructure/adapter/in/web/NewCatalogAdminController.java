@@ -4,6 +4,7 @@ import ec.distribuidoraguayaquil.application.service.NewCatalogAdminService;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductoAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaVarianteEntity;
@@ -64,6 +65,16 @@ public class NewCatalogAdminController {
     @DeleteMapping("/disenos/{id}")
     public void deleteDiseno(@PathVariable Long id) {
         service.deleteDiseno(id);
+    }
+
+    @GetMapping("/disenos/{id}/fotos")
+    public List<DisenoImagenEntity> listDisenoFotos(@PathVariable Long id) {
+        return service.listDisenoImagenes(id);
+    }
+
+    @PutMapping("/disenos/{id}/fotos")
+    public void syncDisenoFotos(@PathVariable Long id, @RequestBody List<ProductoAdminDto.ImagenLine> body) {
+        service.syncDisenoImagenes(id, body);
     }
 
     // ------------------------------------------------------------------ medidas

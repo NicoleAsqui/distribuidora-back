@@ -9,6 +9,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.ConfiguracionInteriorEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.CostoComponenteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.GramajeEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
@@ -33,6 +34,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ConfiguracionInteriorDetalleRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.ConfiguracionInteriorRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.CostoComponenteRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.GramajeRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaImagenRepository;
@@ -78,6 +80,7 @@ import java.util.Set;
 public class NewCatalogAdminService {
 
     private final DisenoRepository disenoRepository;
+    private final DisenoImagenRepository disenoImagenRepository;
     private final MedidaRepository medidaRepository;
     private final VarianteRepository varianteRepository;
     private final VarianteImagenRepository varianteImagenRepository;
@@ -131,14 +134,54 @@ public class NewCatalogAdminService {
         delete(disenoRepository, id, "Diseño");
     }
 
+    @Transactional(readOnly = true)
+    public List<DisenoImagenEntity> listDisenoImagenes(Long disenoId) {
+        find(disenoRepository, disenoId, "Diseño");
+        return disenoImagenRepository.findByDisenoIdOrderByPrincipalDescOrdenAscIdAsc(disenoId);
+    }
+
+    public void syncDisenoImagenes(Long disenoId, List<ProductoAdminDto.ImagenLine> lines) {
+        DisenoEntity diseno = find(disenoRepository, disenoId, "Diseño");
+        disenoImagenRepository.deleteByDisenoId(disenoId);
+        disenoImagenRepository.flush();
+        int i = 0;
+        String firstFull = null;
+        String firstThumb = null;
+        if (lines != null) {
+            for (ProductoAdminDto.ImagenLine line : lines) {
+                if (line == null || line.url() == null || line.url().isBlank()) {
+                    continue;
+                }
+                DisenoImagenEntity e = new DisenoImagenEntity();
+                e.setDisenoId(disenoId);
+                e.setUrl(line.url().trim());
+                String thumb = line.urlThumb();
+                e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
+                e.setPrincipal(nvl(line.principal(), i == 0));
+                e.setOrden(nvl(line.orden(), i));
+                disenoImagenRepository.save(e);
+                if (i == 0) {
+                    firstFull = e.getUrl();
+                    firstThumb = e.getUrlThumb();
+                }
+                i++;
+            }
+        }
+        diseno.setImagenUrl(firstFull);
+        diseno.setImagenThumbUrl(firstThumb);
+        disenoRepository.save(diseno);
+    }
+
     private void applyDiseno(DisenoEntity e, DisenoEntity body) {
         e.setNombre(required(body.getNombre(), "nombre"));
         e.setSlug(blank(body.getSlug()) ? slugify(e.getNombre()) : body.getSlug().trim());
         e.setDescripcion(body.getDescripcion());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
         e.setSeccion(normalizeDisenoSeccion(body.getSeccion()));
-        e.setImagenUrl(blank(body.getImagenUrl()) ? null : body.getImagenUrl().trim());
-        e.setImagenThumbUrl(blank(body.getImagenThumbUrl()) ? null : body.getImagenThumbUrl().trim());
+        if (body.getImagenUrl() != null || body.getImagenThumbUrl() != null) {
+            e.setImagenUrl(blank(body.getImagenUrl()) ? null : body.getImagenUrl().trim());
+            e.setImagenThumbUrl(blank(body.getImagenThumbUrl()) ? null : body.getImagenThumbUrl().trim());
+        }
     }
 
     /** acetato | cartulina | mdf | carton */

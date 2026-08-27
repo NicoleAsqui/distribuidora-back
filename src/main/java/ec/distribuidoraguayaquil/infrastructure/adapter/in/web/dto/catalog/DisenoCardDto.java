@@ -11,6 +11,7 @@ public record DisenoCardDto(
         String seccion,
         String image,
         String imageThumb,
+        java.util.List<DisenoImagenCardDto> imagenes,
         long medidasCount
 ) {
 }
