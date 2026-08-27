@@ -51,7 +51,7 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
               AND (:largo IS NULL OR m.largo = :largo)
               AND (:ancho IS NULL OR m.ancho = :ancho)
               AND (:alto IS NULL OR m.alto = :alto)
-            ORDER BY COALESCE(d.orden, 2147483647) ASC, v.id ASC
+            ORDER BY LOWER(COALESCE(d.nombre, '')) ASC, v.id ASC
             """)
     Page<VarianteEntity> pageByFilters(
             @Param("includeInactive") boolean includeInactive,

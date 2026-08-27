@@ -60,8 +60,6 @@ public class CatalogQueryService {
 
     /** Cuántas tarjetas devuelve {@code ?top=true}. */
     private static final int TOP_LIMIT = 8;
-    /** Un diseño con orden 1..3 se marca como destacado. */
-    private static final int TOP_ORDEN_MAX = 3;
 
     private final DisenoRepository disenoRepository;
     private final MedidaRepository medidaRepository;
@@ -75,7 +73,7 @@ public class CatalogQueryService {
     private final IdeaVarianteRepository ideaVarianteRepository;
 
     public List<DisenoEntity> listDisenosActivos() {
-        return disenoRepository.findByActivoTrueOrderByOrdenAscIdAsc();
+        return disenoRepository.findByActivoTrueOrderByNombreAscIdAsc();
     }
 
     /**
@@ -113,10 +111,17 @@ public class CatalogQueryService {
 
         List<DisenoCardDto> cards = diseños.stream().map(d -> {
             long n = counts.getOrDefault(d.getId(), 0L);
-            Long vid = sampleVarianteByDiseno.get(d.getId());
-            VarianteImagenEntity img = vid == null ? null : imageByVariante.get(vid);
-            String full = img == null ? null : img.getUrl();
-            String thumb = img == null ? null : img.getUrlThumb();
+            String full = d.getImagenUrl();
+            String thumb = d.getImagenThumbUrl();
+            if (full == null || full.isBlank()) {
+                Long vid = sampleVarianteByDiseno.get(d.getId());
+                VarianteImagenEntity img = vid == null ? null : imageByVariante.get(vid);
+                full = img == null ? null : img.getUrl();
+                thumb = img == null ? null : img.getUrlThumb();
+            } else {
+                full = full.trim();
+                thumb = thumb == null || thumb.isBlank() ? null : thumb.trim();
+            }
             if (thumb == null || thumb.isBlank()) {
                 thumb = full;
             }
@@ -135,7 +140,6 @@ public class CatalogQueryService {
 
         cards.sort(Comparator
                 .comparingInt((DisenoCardDto c) -> seccionOrden(c.seccion()))
-                .thenComparingInt(c -> c.orden() == null ? Integer.MAX_VALUE : c.orden())
                 .thenComparing(DisenoCardDto::nombre, Comparator.nullsLast(String::compareToIgnoreCase)));
         return cards;
     }
@@ -253,7 +257,7 @@ public class CatalogQueryService {
     }
 
     /**
-     * @param onlyTop         limita a las primeras {@value #TOP_LIMIT} por orden de diseño
+     * @param onlyTop         limita a las primeras {@value #TOP_LIMIT} del catálogo
      * @param designSlug      filtra por {@code disenos.slug} (opcional)
      * @param ideaSlug        filtra por variantes vinculadas a la idea (opcional)
      * @param includeInactive incluye variantes inactivas (uso admin)
@@ -461,7 +465,7 @@ public class CatalogQueryService {
                 diseno == null ? null : diseno.getId(),
                 diseno == null ? null : diseno.getSlug(),
                 diseno == null ? "" : nullToEmpty(diseno.getDescripcion()),
-                diseno != null && esDestacado(diseno),
+                false,
                 Boolean.TRUE.equals(variante.getActivo()),
                 image,
                 imageThumb,
@@ -530,11 +534,6 @@ public class CatalogQueryService {
             partes.add(valor.stripTrailingZeros().toPlainString());
         }
         return String.join("×", partes);
-    }
-
-    private static boolean esDestacado(DisenoEntity diseno) {
-        Integer orden = diseno.getOrden();
-        return orden != null && orden >= 1 && orden <= TOP_ORDEN_MAX;
     }
 
     private static BigDecimal nvl(BigDecimal value) {

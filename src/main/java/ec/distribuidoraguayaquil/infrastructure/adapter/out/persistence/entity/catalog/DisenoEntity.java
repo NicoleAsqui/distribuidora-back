@@ -40,4 +40,12 @@ public class DisenoEntity {
      */
     @Column(nullable = false, length = 32)
     private String seccion = "cartulina";
+
+    /** Foto del modelo en catálogo (full, GCS). */
+    @Column(name = "imagen_url")
+    private String imagenUrl;
+
+    /** Miniatura para grillas de modelos. */
+    @Column(name = "imagen_thumb_url")
+    private String imagenThumbUrl;
 }

@@ -107,7 +107,7 @@ public class NewCatalogAdminService {
 
     @Transactional(readOnly = true)
     public List<DisenoEntity> listDisenos() {
-        return disenoRepository.findAllByOrderByOrdenAscIdAsc();
+        return disenoRepository.findAllByOrderByNombreAscIdAsc();
     }
 
     @Transactional(readOnly = true)
@@ -136,8 +136,9 @@ public class NewCatalogAdminService {
         e.setSlug(blank(body.getSlug()) ? slugify(e.getNombre()) : body.getSlug().trim());
         e.setDescripcion(body.getDescripcion());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
-        e.setOrden(nvl(body.getOrden(), 0));
         e.setSeccion(normalizeDisenoSeccion(body.getSeccion()));
+        e.setImagenUrl(blank(body.getImagenUrl()) ? null : body.getImagenUrl().trim());
+        e.setImagenThumbUrl(blank(body.getImagenThumbUrl()) ? null : body.getImagenThumbUrl().trim());
     }
 
     /** acetato | cartulina | mdf | carton */
