@@ -266,9 +266,9 @@ public class NewCatalogAdminService {
 
     private void applyVarianteFromProducto(VarianteEntity e, ProductoAdminDto body, boolean creating) {
         requireFk(disenoRepository, body.disenoId(), "disenoId");
-        requireFk(medidaRepository, body.medidaId(), "medidaId");
+        Long medidaId = resolveMedidaId(body);
         e.setDisenoId(body.disenoId());
-        e.setMedidaId(body.medidaId());
+        e.setMedidaId(medidaId);
         if (creating) {
             String sku = body.sku() == null ? "" : body.sku().trim();
             e.setSku(sku.isBlank() ? allocateNextDgSku() : sku);
@@ -277,6 +277,40 @@ public class NewCatalogAdminService {
         }
         // En edición el SKU no se cambia (mantiene el histórico).
         e.setActivo(nvl(body.activo(), Boolean.TRUE));
+    }
+
+    /** Medida desde largo×ancho×alto (preferido) o medidaId legado. */
+    private Long resolveMedidaId(ProductoAdminDto body) {
+        if (body.largo() != null && body.ancho() != null && body.alto() != null) {
+            return findOrCreateMedida(body.largo(), body.ancho(), body.alto(), body.unidad()).getId();
+        }
+        if (body.medidaId() != null) {
+            requireFk(medidaRepository, body.medidaId(), "medidaId");
+            return body.medidaId();
+        }
+        throw badRequest("Indica largo, ancho y alto de la caja (cm)");
+    }
+
+    private MedidaEntity findOrCreateMedida(BigDecimal largo, BigDecimal ancho, BigDecimal alto, String unidad) {
+        if (largo == null || ancho == null || alto == null) {
+            throw badRequest("largo, ancho y alto son obligatorios");
+        }
+        if (largo.signum() <= 0 || ancho.signum() <= 0 || alto.signum() <= 0) {
+            throw badRequest("largo, ancho y alto deben ser mayores a 0");
+        }
+        BigDecimal l = largo.setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal a = ancho.setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal h = alto.setScale(2, java.math.RoundingMode.HALF_UP);
+        String u = blank(unidad) ? "cm" : unidad.trim();
+        return medidaRepository.findFirstByLargoAndAnchoAndAltoAndUnidad(l, a, h, u)
+                .orElseGet(() -> {
+                    MedidaEntity e = new MedidaEntity();
+                    e.setLargo(l);
+                    e.setAncho(a);
+                    e.setAlto(h);
+                    e.setUnidad(u);
+                    return medidaRepository.save(e);
+                });
     }
 
     private void syncProductoChildren(Long varianteId, ProductoAdminDto body) {
@@ -390,10 +424,17 @@ public class NewCatalogAdminService {
         for (VarianteTagEntity t : varianteTagRepository.findByVarianteId(id)) {
             tagIds.add(t.getTagId());
         }
+        MedidaEntity medida = v.getMedidaId() == null
+                ? null
+                : medidaRepository.findById(v.getMedidaId()).orElse(null);
         return new ProductoAdminDto(
                 id,
                 v.getDisenoId(),
                 v.getMedidaId(),
+                medida == null ? null : medida.getLargo(),
+                medida == null ? null : medida.getAncho(),
+                medida == null ? null : medida.getAlto(),
+                medida == null ? "cm" : medida.getUnidad(),
                 v.getSku(),
                 v.getActivo(),
                 precios,

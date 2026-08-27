@@ -5,12 +5,17 @@ import java.util.List;
 
 /**
  * Ficha completa de producto (variante + precios + imágenes + materiales + tags).
+ * La medida se envía como largo/ancho/alto (se crea o reutiliza en servidor).
  * El SKU se asigna automáticamente si viene vacío al crear.
  */
 public record ProductoAdminDto(
         Long id,
         Long disenoId,
         Long medidaId,
+        BigDecimal largo,
+        BigDecimal ancho,
+        BigDecimal alto,
+        String unidad,
         String sku,
         Boolean activo,
         List<PrecioLine> precios,
