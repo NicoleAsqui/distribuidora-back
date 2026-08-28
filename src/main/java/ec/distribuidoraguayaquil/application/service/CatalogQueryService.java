@@ -30,6 +30,8 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -60,6 +62,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class CatalogQueryService {
+
+    private static final Logger log = LoggerFactory.getLogger(CatalogQueryService.class);
 
     /** Cuántas tarjetas devuelve {@code ?top=true}. */
     private static final int TOP_LIMIT = 8;
@@ -114,14 +118,20 @@ public class CatalogQueryService {
         }
 
         List<Long> disenoIds = diseños.stream().map(DisenoEntity::getId).toList();
-        Map<Long, List<DisenoImagenEntity>> fotosByDiseno = groupBy(
-                disenoImagenRepository.findByDisenoIdInOrderByPrincipalDescOrdenAscIdAsc(disenoIds),
-                DisenoImagenEntity::getDisenoId);
+        Map<Long, List<DisenoImagenEntity>> fotosByDiseno = Map.of();
+        try {
+            fotosByDiseno = groupBy(
+                    disenoImagenRepository.findByDisenoIdInOrderByPrincipalDescOrdenAscIdAsc(disenoIds),
+                    DisenoImagenEntity::getDisenoId);
+        } catch (Exception e) {
+            log.warn("No se pudieron cargar diseno_imagenes; se usan imágenes legacy del diseño/variante", e);
+        }
 
+        Map<Long, List<DisenoImagenEntity>> fotosFinal = fotosByDiseno;
         List<DisenoCardDto> cards = diseños.stream().map(d -> {
             long n = counts.getOrDefault(d.getId(), 0L);
             List<DisenoImagenCardDto> imagenes = new ArrayList<>();
-            for (DisenoImagenEntity img : fotosByDiseno.getOrDefault(d.getId(), List.of())) {
+            for (DisenoImagenEntity img : fotosFinal.getOrDefault(d.getId(), List.of())) {
                 String full = img.getUrl();
                 String thumb = img.getUrlThumb();
                 if (thumb == null || thumb.isBlank()) {
