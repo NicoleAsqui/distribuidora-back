@@ -1,5 +1,5 @@
 # Multi-stage build for Google Cloud Run + Developer Connect
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 COPY mvnw .
 COPY .mvn .mvn
@@ -8,9 +8,9 @@ RUN chmod +x mvnw && ./mvnw -q -B dependency:go-offline
 COPY src src
 RUN ./mvnw -q -B -DskipTests package
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN addgroup -S app && adduser -S app -G app
+RUN groupadd -r app && useradd -r -g app app
 COPY --from=build /workspace/target/*.jar /app/app.jar
 USER app
 ENV PORT=8080

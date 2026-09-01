@@ -24,11 +24,11 @@ public class ProductImageUploadService {
     private static final int FULL_MAX = 1200;
     /** Miniatura catálogo: más grande y nítida para ver el modelo sin ir al detalle. */
     private static final int THUMB_MAX = 520;
-    private static final double FULL_QUALITY = 0.86;
-    private static final double THUMB_QUALITY = 0.80;
-    private static final String OUTPUT_FORMAT = "webp";
-    private static final String OUTPUT_EXT = ".webp";
-    private static final String OUTPUT_MIME = "image/webp";
+    private static final double FULL_QUALITY = 0.88;
+    private static final double THUMB_QUALITY = 0.78;
+    private static final String OUTPUT_FORMAT = "jpg";
+    private static final String OUTPUT_EXT = ".jpg";
+    private static final String OUTPUT_MIME = "image/jpeg";
     private static final Set<String> ALLOWED = Set.of(
             "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/pjpeg", "image/x-png"
     );
