@@ -55,6 +55,9 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTagRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.http.HttpStatus;
@@ -78,6 +81,8 @@ import java.util.Set;
 @Transactional
 @RequiredArgsConstructor
 public class NewCatalogAdminService {
+
+    private static final Logger log = LoggerFactory.getLogger(NewCatalogAdminService.class);
 
     private final DisenoRepository disenoRepository;
     private final DisenoImagenRepository disenoImagenRepository;
@@ -137,39 +142,74 @@ public class NewCatalogAdminService {
     @Transactional(readOnly = true)
     public List<DisenoImagenEntity> listDisenoImagenes(Long disenoId) {
         find(disenoRepository, disenoId, "Diseño");
-        return disenoImagenRepository.findByDisenoIdOrderByPrincipalDescOrdenAscIdAsc(disenoId);
+        try {
+            return disenoImagenRepository.findByDisenoIdOrderByPrincipalDescOrdenAscIdAsc(disenoId);
+        } catch (DataAccessException e) {
+            log.warn("No se pudieron listar fotos del diseño {} (¿falta migración diseno_imagenes?)", disenoId, e);
+            return List.of();
+        }
     }
 
     public void syncDisenoImagenes(Long disenoId, List<ProductoAdminDto.ImagenLine> lines) {
         DisenoEntity diseno = find(disenoRepository, disenoId, "Diseño");
-        disenoImagenRepository.deleteByDisenoId(disenoId);
-        disenoImagenRepository.flush();
+        List<ProductoAdminDto.ImagenLine> safe = lines == null ? List.of() : lines;
+        boolean hasPhotos = safe.stream().anyMatch(l -> l != null && l.url() != null && !l.url().isBlank());
+
+        if (!hasPhotos) {
+            diseno.setImagenUrl(null);
+            diseno.setImagenThumbUrl(null);
+            disenoRepository.save(diseno);
+            try {
+                disenoImagenRepository.deleteByDisenoId(disenoId);
+            } catch (DataAccessException e) {
+                log.debug("diseno_imagenes no disponible al limpiar fotos del diseño {}", disenoId);
+            }
+            return;
+        }
+
+        try {
+            disenoImagenRepository.deleteByDisenoId(disenoId);
+            disenoImagenRepository.flush();
+        } catch (DataAccessException e) {
+            throw disenoImagenesUnavailable(e);
+        }
+
         int i = 0;
         String firstFull = null;
         String firstThumb = null;
-        if (lines != null) {
-            for (ProductoAdminDto.ImagenLine line : lines) {
-                if (line == null || line.url() == null || line.url().isBlank()) {
-                    continue;
-                }
-                DisenoImagenEntity e = new DisenoImagenEntity();
-                e.setDisenoId(disenoId);
-                e.setUrl(line.url().trim());
-                String thumb = line.urlThumb();
-                e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
-                e.setPrincipal(nvl(line.principal(), i == 0));
-                e.setOrden(nvl(line.orden(), i));
-                disenoImagenRepository.save(e);
-                if (i == 0) {
-                    firstFull = e.getUrl();
-                    firstThumb = e.getUrlThumb();
-                }
-                i++;
+        for (ProductoAdminDto.ImagenLine line : safe) {
+            if (line == null || line.url() == null || line.url().isBlank()) {
+                continue;
             }
+            DisenoImagenEntity e = new DisenoImagenEntity();
+            e.setDisenoId(disenoId);
+            e.setUrl(line.url().trim());
+            String thumb = line.urlThumb();
+            e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
+            e.setPrincipal(nvl(line.principal(), i == 0));
+            e.setOrden(nvl(line.orden(), i));
+            try {
+                disenoImagenRepository.save(e);
+            } catch (DataAccessException ex) {
+                throw disenoImagenesUnavailable(ex);
+            }
+            if (i == 0) {
+                firstFull = e.getUrl();
+                firstThumb = e.getUrlThumb();
+            }
+            i++;
         }
         diseno.setImagenUrl(firstFull);
         diseno.setImagenThumbUrl(firstThumb);
         disenoRepository.save(diseno);
+    }
+
+    private static ResponseStatusException disenoImagenesUnavailable(DataAccessException e) {
+        log.error("Tabla diseno_imagenes no disponible", e);
+        return new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "No se pueden guardar fotos del diseño: falta la tabla diseno_imagenes en la base de datos. "
+                        + "Aplica la migración sql/007_diseno_imagenes.sql.");
     }
 
     private void applyDiseno(DisenoEntity e, DisenoEntity body) {

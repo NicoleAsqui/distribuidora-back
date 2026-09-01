@@ -32,6 +32,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -81,7 +82,14 @@ public class CatalogQueryService {
     private final IdeaVarianteRepository ideaVarianteRepository;
 
     public List<DisenoEntity> listDisenosActivos() {
-        return disenoRepository.findByActivoTrueOrderByNombreAscIdAsc();
+        try {
+            return disenoRepository.findByActivoTrueOrderByNombreAscIdAsc();
+        } catch (DataAccessException e) {
+            log.error("No se pudieron listar diseños activos (¿falta migración disenos.seccion?)", e);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Catálogo de diseños no disponible: falta migración de base de datos.");
+        }
     }
 
     /**
@@ -89,6 +97,17 @@ public class CatalogQueryService {
      * La sección sale de {@code disenos.seccion}.
      */
     public List<DisenoCardDto> listDisenoCards() {
+        try {
+            return buildDisenoCards();
+        } catch (DataAccessException e) {
+            log.error("Error al armar tarjetas de diseño", e);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Catálogo de diseños no disponible temporalmente.");
+        }
+    }
+
+    private List<DisenoCardDto> buildDisenoCards() {
         List<DisenoEntity> diseños = listDisenosActivos();
         if (diseños.isEmpty()) {
             return List.of();
@@ -123,7 +142,7 @@ public class CatalogQueryService {
             fotosByDiseno = groupBy(
                     disenoImagenRepository.findByDisenoIdInOrderByPrincipalDescOrdenAscIdAsc(disenoIds),
                     DisenoImagenEntity::getDisenoId);
-        } catch (Exception e) {
+        } catch (DataAccessException e) {
             log.warn("No se pudieron cargar diseno_imagenes; se usan imágenes legacy del diseño/variante", e);
         }
 

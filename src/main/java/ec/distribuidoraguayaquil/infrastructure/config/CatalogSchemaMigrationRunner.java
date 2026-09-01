@@ -1,0 +1,44 @@
+package ec.distribuidoraguayaquil.infrastructure.config;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
+import org.springframework.stereotype.Component;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+
+/**
+ * Aplica migraciones idempotentes del catálogo al arrancar (p. ej. diseno_imagenes en Neon).
+ */
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class CatalogSchemaMigrationRunner implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(CatalogSchemaMigrationRunner.class);
+
+    private final DataSource dataSource;
+
+    public CatalogSchemaMigrationRunner(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    @Override
+    public void run(ApplicationArguments args) {
+        var resource = new ClassPathResource("db/migrations/007_diseno_imagenes.sql");
+        if (!resource.exists()) {
+            return;
+        }
+        try (Connection conn = dataSource.getConnection()) {
+            ScriptUtils.executeSqlScript(conn, resource);
+            log.info("Migración catálogo aplicada: 007_diseno_imagenes.sql");
+        } catch (Exception e) {
+            log.error("No se pudo aplicar 007_diseno_imagenes.sql — revisa la base de datos", e);
+        }
+    }
+}
