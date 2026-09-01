@@ -63,6 +63,11 @@
 			<version>0.4.20</version>
 		</dependency>
 		<dependency>
+			<groupId>com.github.gotson.nightmonkeys</groupId>
+			<artifactId>imageio-webp</artifactId>
+			<version>0.6.1</version>
+		</dependency>
+		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>

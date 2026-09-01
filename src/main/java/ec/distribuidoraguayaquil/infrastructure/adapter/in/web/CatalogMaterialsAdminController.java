@@ -5,6 +5,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.MaterialImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TipoMaterialEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import lombok.RequiredArgsConstructor;
@@ -153,6 +154,33 @@ public class CatalogMaterialsAdminController {
     @DeleteMapping("/papeles-forro/{id}")
     public void deletePapelForro(@PathVariable Long id) {
         service.deletePapelForro(id);
+    }
+
+    // ------------------------------------------------------------------ texturas
+
+    @GetMapping("/texturas")
+    public List<TexturaEntity> listTexturas() {
+        return service.listTexturas();
+    }
+
+    @GetMapping("/texturas/{id}")
+    public TexturaEntity getTextura(@PathVariable Long id) {
+        return service.getTextura(id);
+    }
+
+    @PostMapping("/texturas")
+    public TexturaEntity createTextura(@RequestBody TexturaEntity body) {
+        return service.createTextura(body);
+    }
+
+    @PutMapping("/texturas/{id}")
+    public TexturaEntity updateTextura(@PathVariable Long id, @RequestBody TexturaEntity body) {
+        return service.updateTextura(id, body);
+    }
+
+    @DeleteMapping("/texturas/{id}")
+    public void deleteTextura(@PathVariable Long id) {
+        service.deleteTextura(id);
     }
 
     // ------------------------------------------------------------------ viniles

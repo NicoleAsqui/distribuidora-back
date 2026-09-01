@@ -15,6 +15,7 @@ public record ProductCardDto(
         boolean active,
         String image,
         String imageThumb,
-        List<ProductVariantDto> variants
+        List<ProductVariantDto> variants,
+        List<ProductTexturaDto> texturas
 ) {
 }

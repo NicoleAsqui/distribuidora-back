@@ -30,15 +30,20 @@ public class CatalogSchemaMigrationRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        var resource = new ClassPathResource("db/migrations/007_diseno_imagenes.sql");
+        runScript("007_diseno_imagenes.sql");
+        runScript("008_texturas_cartulina.sql");
+    }
+
+    private void runScript(String name) {
+        var resource = new ClassPathResource("db/migrations/" + name);
         if (!resource.exists()) {
             return;
         }
         try (Connection conn = dataSource.getConnection()) {
             ScriptUtils.executeSqlScript(conn, resource);
-            log.info("Migración catálogo aplicada: 007_diseno_imagenes.sql");
+            log.info("Migración catálogo aplicada: {}", name);
         } catch (Exception e) {
-            log.error("No se pudo aplicar 007_diseno_imagenes.sql — revisa la base de datos", e);
+            log.error("No se pudo aplicar {} — revisa la base de datos", name, e);
         }
     }
 }

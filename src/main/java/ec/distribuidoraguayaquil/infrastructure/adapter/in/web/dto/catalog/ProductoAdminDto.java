@@ -21,7 +21,8 @@ public record ProductoAdminDto(
         List<PrecioLine> precios,
         List<ImagenLine> imagenes,
         List<ComponenteLine> componentes,
-        List<Long> tagIds
+        List<Long> tagIds,
+        List<TexturaLine> texturas
 ) {
     public record PrecioLine(
             Long id,
@@ -45,6 +46,15 @@ public record ProductoAdminDto(
             Long materialId,
             Long gramajeId,
             BigDecimal cantidad
+    ) {
+    }
+
+    public record TexturaLine(
+            Long id,
+            Long texturaId,
+            String url,
+            String urlThumb,
+            Integer orden
     ) {
     }
 }

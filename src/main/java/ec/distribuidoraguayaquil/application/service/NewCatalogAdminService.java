@@ -20,12 +20,14 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PrecioEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TipoMaterialEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TagEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteAtributoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteComponenteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteConfiguracionEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteTagEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteTexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.AtributoRepository;
@@ -46,6 +48,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PapelForroRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PrecioRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.TagRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.TexturaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.TipoMaterialRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteAtributoRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteComponenteRepository;
@@ -53,6 +56,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTagRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTexturaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -109,6 +113,8 @@ public class NewCatalogAdminService {
     private final IdeaVarianteRepository ideaVarianteRepository;
     private final TagRepository tagRepository;
     private final VarianteTagRepository varianteTagRepository;
+    private final TexturaRepository texturaRepository;
+    private final VarianteTexturaRepository varianteTexturaRepository;
     private final CostoComponenteRepository costoComponenteRepository;
 
     // ------------------------------------------------------------------ diseños
@@ -411,6 +417,7 @@ public class NewCatalogAdminService {
     private void syncProductoChildren(Long varianteId, ProductoAdminDto body) {
         syncPrecios(varianteId, body.precios() == null ? List.of() : body.precios());
         syncImagenes(varianteId, body.imagenes() == null ? List.of() : body.imagenes());
+        syncTexturas(varianteId, body.texturas() == null ? List.of() : body.texturas());
         syncComponentes(varianteId, body.componentes() == null ? List.of() : body.componentes());
         syncTags(varianteId, body.tagIds() == null ? List.of() : body.tagIds());
     }
@@ -456,6 +463,31 @@ public class NewCatalogAdminService {
             e.setPrincipal(nvl(line.principal(), i == 0));
             e.setOrden(nvl(line.orden(), i));
             varianteImagenRepository.save(e);
+            i++;
+        }
+    }
+
+    private void syncTexturas(Long varianteId, List<ProductoAdminDto.TexturaLine> lines) {
+        varianteTexturaRepository.deleteByVarianteId(varianteId);
+        varianteTexturaRepository.flush();
+        Set<Long> seen = new HashSet<>();
+        int i = 0;
+        for (ProductoAdminDto.TexturaLine line : lines) {
+            if (line == null || line.texturaId() == null || line.url() == null || line.url().isBlank()) {
+                continue;
+            }
+            if (!seen.add(line.texturaId())) {
+                throw badRequest("Textura duplicada en el producto");
+            }
+            requireFk(texturaRepository, line.texturaId(), "texturaId");
+            VarianteTexturaEntity e = new VarianteTexturaEntity();
+            e.setVarianteId(varianteId);
+            e.setTexturaId(line.texturaId());
+            e.setUrl(line.url().trim());
+            String thumb = line.urlThumb();
+            e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
+            e.setOrden(nvl(line.orden(), i));
+            varianteTexturaRepository.save(e);
             i++;
         }
     }
@@ -519,6 +551,11 @@ public class NewCatalogAdminService {
         for (VarianteTagEntity t : varianteTagRepository.findByVarianteId(id)) {
             tagIds.add(t.getTagId());
         }
+        List<ProductoAdminDto.TexturaLine> texturas = new ArrayList<>();
+        for (VarianteTexturaEntity vt : varianteTexturaRepository.findByVarianteIdOrderByOrdenAscIdAsc(id)) {
+            texturas.add(new ProductoAdminDto.TexturaLine(
+                    vt.getId(), vt.getTexturaId(), vt.getUrl(), vt.getUrlThumb(), vt.getOrden()));
+        }
         MedidaEntity medida = v.getMedidaId() == null
                 ? null
                 : medidaRepository.findById(v.getMedidaId()).orElse(null);
@@ -535,7 +572,8 @@ public class NewCatalogAdminService {
                 precios,
                 imagenes,
                 componentes,
-                tagIds
+                tagIds,
+                texturas
         );
     }
 
@@ -747,6 +785,45 @@ public class NewCatalogAdminService {
         e.setGramajes(trimToNull(body.getGramajes()));
         e.setImagenUrl(trimToNull(body.getImagenUrl()));
         e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
+        e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+        e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
+    }
+
+    // -------------------------------------------------------------- texturas
+
+    @Transactional(readOnly = true)
+    public List<TexturaEntity> listTexturas() {
+        return texturaRepository.findAllByOrderByOrdenAscNombreAscIdAsc();
+    }
+
+    @Transactional(readOnly = true)
+    public TexturaEntity getTextura(Long id) {
+        return find(texturaRepository, id, "Textura");
+    }
+
+    public TexturaEntity createTextura(TexturaEntity body) {
+        TexturaEntity e = new TexturaEntity();
+        applyTextura(e, body);
+        return texturaRepository.save(e);
+    }
+
+    public TexturaEntity updateTextura(Long id, TexturaEntity body) {
+        TexturaEntity e = find(texturaRepository, id, "Textura");
+        applyTextura(e, body);
+        return texturaRepository.save(e);
+    }
+
+    public void deleteTextura(Long id) {
+        delete(texturaRepository, id, "Textura");
+    }
+
+    private void applyTextura(TexturaEntity e, TexturaEntity body) {
+        e.setNombre(required(body.getNombre(), "nombre"));
+        e.setSlug(blank(body.getSlug()) ? slugify(e.getNombre()) : body.getSlug().trim());
+        e.setImagenUrl(trimToNull(body.getImagenUrl()));
+        e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
+        String sec = body.getSeccion() == null ? "" : body.getSeccion().trim().toLowerCase(Locale.ROOT);
+        e.setSeccion(sec.isBlank() ? "cartulina" : sec);
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
         e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
     }

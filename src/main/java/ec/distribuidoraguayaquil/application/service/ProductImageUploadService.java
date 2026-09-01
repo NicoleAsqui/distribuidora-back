@@ -24,11 +24,13 @@ public class ProductImageUploadService {
     private static final int FULL_MAX = 1200;
     /** Miniatura catálogo: más grande y nítida para ver el modelo sin ir al detalle. */
     private static final int THUMB_MAX = 520;
-    private static final double FULL_QUALITY = 0.88;
-    /** Comprimida pero legible en grillas. */
-    private static final double THUMB_QUALITY = 0.78;
+    private static final double FULL_QUALITY = 0.86;
+    private static final double THUMB_QUALITY = 0.80;
+    private static final String OUTPUT_FORMAT = "webp";
+    private static final String OUTPUT_EXT = ".webp";
+    private static final String OUTPUT_MIME = "image/webp";
     private static final Set<String> ALLOWED = Set.of(
-            "image/jpeg", "image/png", "image/webp", "image/gif"
+            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/pjpeg", "image/x-png"
     );
 
     private final GcsProperties gcsProperties;
@@ -54,16 +56,18 @@ public class ProductImageUploadService {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta el campo multipart \"image\"");
         }
-        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
-        if (!ALLOWED.contains(contentType)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Solo se permiten imágenes JPEG, PNG, WebP o GIF");
-        }
 
         try {
             byte[] original = file.getBytes();
-            byte[] fullJpeg = resizeJpeg(original, FULL_MAX, FULL_QUALITY);
-            byte[] thumbJpeg = resizeJpeg(original, THUMB_MAX, THUMB_QUALITY);
+            String contentType = resolveContentType(file, original);
+            if (!ALLOWED.contains(contentType)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Solo se permiten imágenes JPEG, PNG, WebP o GIF (recibido: "
+                                + (file.getContentType() == null ? "sin tipo" : file.getContentType()) + ")");
+            }
+
+            byte[] full = resize(original, FULL_MAX, FULL_QUALITY);
+            byte[] thumb = resize(original, THUMB_MAX, THUMB_QUALITY);
 
             String baseName = sanitizeBaseName(file.getOriginalFilename());
             LocalDate now = LocalDate.now();
@@ -72,11 +76,11 @@ public class ProductImageUploadService {
                 root = root + "/" + folderOverride.trim().replaceAll("^/+|/+$", "");
             }
             String prefix = root + "/" + now.getYear() + "/" + String.format("%02d", now.getMonthValue());
-            String objectPathFull = prefix + "/" + baseName + ".jpg";
-            String objectPathThumb = prefix + "/" + baseName + "-thumb.jpg";
+            String objectPathFull = prefix + "/" + baseName + OUTPUT_EXT;
+            String objectPathThumb = prefix + "/" + baseName + "-thumb" + OUTPUT_EXT;
 
-            String image = putObject(objectPathFull, fullJpeg);
-            String imageThumb = putObject(objectPathThumb, thumbJpeg);
+            String image = putObject(objectPathFull, full, OUTPUT_MIME);
+            String imageThumb = putObject(objectPathThumb, thumb, OUTPUT_MIME);
 
             return Map.of(
                     "image", image,
@@ -141,8 +145,62 @@ public class ProductImageUploadService {
         }
     }
 
-    private String putObject(String objectPath, byte[] bytes) {
-        return putObject(objectPath, bytes, "image/jpeg");
+    /** Content-Type del multipart, extensión o firma del archivo (Safari a veces manda vacío). */
+    private static String resolveContentType(MultipartFile file, byte[] bytes) {
+        String raw = file.getContentType();
+        if (raw != null && !raw.isBlank()) {
+            String ct = raw.toLowerCase(Locale.ROOT).split(";")[0].trim();
+            if (ALLOWED.contains(ct)) {
+                return ct;
+            }
+            if ("application/octet-stream".equals(ct)) {
+                String sniffed = sniffMagic(bytes);
+                if (sniffed != null) {
+                    return sniffed;
+                }
+            }
+        }
+        String fromExt = fromExtension(file.getOriginalFilename());
+        if (fromExt != null) {
+            return fromExt;
+        }
+        String sniffed = sniffMagic(bytes);
+        if (sniffed != null) {
+            return sniffed;
+        }
+        return raw == null ? "" : raw.toLowerCase(Locale.ROOT);
+    }
+
+    private static String fromExtension(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return null;
+        }
+        String lower = filename.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".gif")) return "image/gif";
+        return null;
+    }
+
+    private static String sniffMagic(byte[] bytes) {
+        if (bytes == null || bytes.length < 12) {
+            return null;
+        }
+        if (bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xD8) {
+            return "image/jpeg";
+        }
+        if (bytes[0] == (byte) 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+            return "image/png";
+        }
+        if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+            return "image/gif";
+        }
+        if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
+                && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+            return "image/webp";
+        }
+        return null;
     }
 
     private String putObject(String objectPath, byte[] bytes, String contentType) {
@@ -154,12 +212,12 @@ public class ProductImageUploadService {
         return gcsProperties.publicBase() + "/" + objectPath;
     }
 
-    private static byte[] resizeJpeg(byte[] input, int maxSide, double quality) throws IOException {
+    private static byte[] resize(byte[] input, int maxSide, double quality) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Thumbnails.of(new ByteArrayInputStream(input))
                 .size(maxSide, maxSide)
                 .keepAspectRatio(true)
-                .outputFormat("jpg")
+                .outputFormat(OUTPUT_FORMAT)
                 .outputQuality(quality)
                 .toOutputStream(out);
         return out.toByteArray();

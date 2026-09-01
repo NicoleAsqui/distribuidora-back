@@ -5,6 +5,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.Catal
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.DisenoCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -60,6 +61,12 @@ public class PublicCatalogController {
     @GetMapping("/papeles-forro")
     public List<PapelForroEntity> papelesForro() {
         return catalogQueryService.listPapelesForroActivos();
+    }
+
+    /** Colores / texturas de cartulina (muestra swatch). */
+    @GetMapping("/texturas")
+    public List<TexturaEntity> texturas(@RequestParam(required = false) String seccion) {
+        return catalogQueryService.listTexturasActivas(seccion);
     }
 
     /**
