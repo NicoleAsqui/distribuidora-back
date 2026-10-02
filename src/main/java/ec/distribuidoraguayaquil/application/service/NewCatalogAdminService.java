@@ -224,6 +224,7 @@ public class NewCatalogAdminService {
         e.setDescripcion(body.getDescripcion());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
         e.setSeccion(normalizeDisenoSeccion(body.getSeccion()));
+        e.setMotor(normalizeDisenoMotor(body.getMotor(), e.getSeccion()));
         if (body.getImagenUrl() != null || body.getImagenThumbUrl() != null) {
             e.setImagenUrl(blank(body.getImagenUrl()) ? null : body.getImagenUrl().trim());
             e.setImagenThumbUrl(blank(body.getImagenThumbUrl()) ? null : body.getImagenThumbUrl().trim());
@@ -237,6 +238,21 @@ public class NewCatalogAdminService {
             case "acetato", "cartulina", "mdf", "carton" -> s;
             case "" -> "cartulina";
             default -> throw badRequest("Sección inválida. Usa: acetato, cartulina, mdf o carton");
+        };
+    }
+
+    private static String normalizeDisenoMotor(String raw, String seccion) {
+        if (raw != null && !raw.isBlank()) {
+            String m = raw.trim().toLowerCase(Locale.ROOT).replace('-', '_');
+            if (m.matches("[a-z0-9_]{2,64}")) {
+                return m;
+            }
+            throw badRequest("Motor de precios inválido");
+        }
+        return switch (seccion == null ? "cartulina" : seccion) {
+            case "acetato", "carton" -> "acetato_forrada";
+            case "mdf" -> "cartulina_mdf";
+            default -> "cartulina_tapa";
         };
     }
 
@@ -416,7 +432,7 @@ public class NewCatalogAdminService {
 
     private void syncProductoChildren(Long varianteId, ProductoAdminDto body) {
         syncPrecios(varianteId, body.precios() == null ? List.of() : body.precios());
-        syncImagenes(varianteId, body.imagenes() == null ? List.of() : body.imagenes());
+        // Fotos del modelo viven en el diseño; no sincronizar variante_imagenes desde el admin de productos.
         syncTexturas(varianteId, body.texturas() == null ? List.of() : body.texturas());
         syncComponentes(varianteId, body.componentes() == null ? List.of() : body.componentes());
         syncTags(varianteId, body.tagIds() == null ? List.of() : body.tagIds());
@@ -536,12 +552,7 @@ public class NewCatalogAdminService {
         for (PrecioEntity p : precioRepository.findByVarianteIdOrderByCantidadDesdeAsc(id)) {
             precios.add(new ProductoAdminDto.PrecioLine(p.getId(), p.getCantidadDesde(), p.getPrecio()));
         }
-        List<ProductoAdminDto.ImagenLine> imagenes = new ArrayList<>();
-        for (VarianteImagenEntity img : varianteImagenRepository
-                .findByVarianteIdOrderByPrincipalDescOrdenAscIdAsc(id)) {
-            imagenes.add(new ProductoAdminDto.ImagenLine(
-                    img.getId(), img.getUrl(), img.getUrlThumb(), img.getPrincipal(), img.getOrden()));
-        }
+        List<ProductoAdminDto.ImagenLine> imagenes = List.of();
         List<ProductoAdminDto.ComponenteLine> componentes = new ArrayList<>();
         for (VarianteComponenteEntity c : varianteComponenteRepository.findByVarianteIdOrderByIdAsc(id)) {
             componentes.add(new ProductoAdminDto.ComponenteLine(

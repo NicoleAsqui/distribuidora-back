@@ -16,6 +16,8 @@ public record ProductCardDto(
         String image,
         String imageThumb,
         List<ProductVariantDto> variants,
-        List<ProductTexturaDto> texturas
+        List<ProductTexturaDto> texturas,
+        /** Galería del diseño (detalle); no se usa como foto por cada SKU en listados. */
+        List<DisenoImagenCardDto> disenoImagenes
 ) {
 }

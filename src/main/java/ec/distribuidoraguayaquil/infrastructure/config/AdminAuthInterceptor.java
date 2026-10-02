@@ -78,8 +78,11 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
             return true;
         }
         if (path.startsWith("/api/pricing-quotes")) {
-            // público: crear; admin: listar/editar/borrar
+            // público: crear; enlace del correo: editar precios con token
             if (HttpMethod.POST.matches(method) && path.equals("/api/pricing-quotes")) {
+                return false;
+            }
+            if (path.startsWith("/api/pricing-quotes/public-edit/")) {
                 return false;
             }
             return true;

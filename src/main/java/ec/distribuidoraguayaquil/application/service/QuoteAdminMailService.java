@@ -4,6 +4,7 @@ import ec.distribuidoraguayaquil.domain.port.in.SiteConfigUseCase;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.PricingQuoteEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -19,14 +20,17 @@ public class QuoteAdminMailService {
     private final ResendEmailService resendEmailService;
     private final SiteConfigUseCase siteConfigUseCase;
     private final ObjectMapper objectMapper;
+    private final String publicSiteUrl;
 
     public QuoteAdminMailService(
             ResendEmailService resendEmailService,
             SiteConfigUseCase siteConfigUseCase,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            @Value("${PUBLIC_SITE_URL:}") String publicSiteUrl) {
         this.resendEmailService = resendEmailService;
         this.siteConfigUseCase = siteConfigUseCase;
         this.objectMapper = objectMapper;
+        this.publicSiteUrl = publicSiteUrl == null ? "" : publicSiteUrl.trim();
     }
 
     public void notifyAdminNewWebQuote(PricingQuoteEntity quote) {
@@ -118,7 +122,8 @@ public class QuoteAdminMailService {
                     <tbody>%s</tbody>
                   </table>
                   <p style="margin:18px 0 0;font-size:18px;">Total estimado: <strong>$%s USD</strong></p>
-                  <p style="margin:12px 0 0;color:#64748b;font-size:13px;">Revisa el detalle completo en Admin → Cotizaciones.</p>
+                  %s
+                  <p style="margin:12px 0 0;color:#64748b;font-size:13px;">También puedes revisar en Admin → Cotizaciones.</p>
                 </div>
                 """.formatted(
                 esc(quote.getCode()),
@@ -128,8 +133,35 @@ public class QuoteAdminMailService {
                 esc(safe(quote.getDeliveryDate()).isBlank() ? "-" : quote.getDeliveryDate()),
                 esc(safe(quote.getNotes()).isBlank() ? "-" : quote.getNotes()),
                 itemsHtml,
-                money(quote.getTotal() == null ? BigDecimal.ZERO : quote.getTotal())
+                money(quote.getTotal() == null ? BigDecimal.ZERO : quote.getTotal()),
+                editButtonHtml(quote)
         );
+    }
+
+    private String editButtonHtml(PricingQuoteEntity quote) {
+        String token = quote.getEditToken();
+        if (token == null || token.isBlank() || publicSiteUrl.isBlank()) {
+            return "<p style=\"margin:16px 0 0;color:#64748b;font-size:13px;\">"
+                    + "Configura PUBLIC_SITE_URL en el backend para el botón Editar PDF en el correo.</p>";
+        }
+        String base = publicSiteUrl.replaceAll("/+$", "");
+        String url = base + "/admin/cotizacion/edit/" + escUrl(quote.getId())
+                + "?token=" + escUrl(token);
+        return """
+                <p style="margin:20px 0 0;">
+                  <a href="%s" style="display:inline-block;background:#00B8C4;color:#fff;text-decoration:none;
+                  font-weight:700;padding:12px 20px;border-radius:8px;font-size:15px;">
+                    Editar PDF / precios
+                  </a>
+                </p>
+                <p style="margin:8px 0 0;color:#64748b;font-size:12px;">
+                  Ajusta precios sin perder cliente, medidas ni modelos. Luego genera el PDF de nuevo.
+                </p>
+                """.formatted(url);
+    }
+
+    private static String escUrl(String s) {
+        return java.net.URLEncoder.encode(safe(s), java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static String text(JsonNode node, String field) {

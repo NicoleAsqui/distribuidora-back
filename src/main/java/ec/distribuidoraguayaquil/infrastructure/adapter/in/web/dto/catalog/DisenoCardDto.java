@@ -9,6 +9,8 @@ public record DisenoCardDto(
         Integer orden,
         /** Familia del diseño: acetato | cartulina | mdf | carton */
         String seccion,
+        /** Motor de precios (quote-engine). */
+        String motor,
         String image,
         String imageThumb,
         java.util.List<DisenoImagenCardDto> imagenes,

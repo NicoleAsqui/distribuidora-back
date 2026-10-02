@@ -17,7 +17,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PrecioEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteTexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
@@ -30,7 +29,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PapelForroRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PrecioRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.TexturaRepository;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTexturaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
@@ -79,7 +77,6 @@ public class CatalogQueryService {
     private final MedidaRepository medidaRepository;
     private final VarianteRepository varianteRepository;
     private final PrecioRepository precioRepository;
-    private final VarianteImagenRepository varianteImagenRepository;
     private final VarianteTexturaRepository varianteTexturaRepository;
     private final TexturaRepository texturaRepository;
     private final PapelForroRepository papelForroRepository;
@@ -128,21 +125,6 @@ public class CatalogQueryService {
             }
         }
 
-        Map<Long, Long> sampleVarianteByDiseno = new HashMap<>();
-        for (VarianteEntity v : varianteRepository.findByActivoTrue()) {
-            if (v.getDisenoId() == null) continue;
-            sampleVarianteByDiseno.merge(v.getDisenoId(), v.getId(), Math::min);
-        }
-
-        Map<Long, VarianteImagenEntity> imageByVariante = new HashMap<>();
-        List<Long> sampleIds = sampleVarianteByDiseno.values().stream().distinct().toList();
-        if (!sampleIds.isEmpty()) {
-            for (VarianteImagenEntity img : varianteImagenRepository
-                    .findByVarianteIdInOrderByPrincipalDescOrdenAscIdAsc(sampleIds)) {
-                imageByVariante.putIfAbsent(img.getVarianteId(), img);
-            }
-        }
-
         List<Long> disenoIds = diseños.stream().map(DisenoEntity::getId).toList();
         Map<Long, List<DisenoImagenEntity>> fotosByDiseno = Map.of();
         try {
@@ -150,7 +132,7 @@ public class CatalogQueryService {
                     disenoImagenRepository.findByDisenoIdInOrderByPrincipalDescOrdenAscIdAsc(disenoIds),
                     DisenoImagenEntity::getDisenoId);
         } catch (DataAccessException e) {
-            log.warn("No se pudieron cargar diseno_imagenes; se usan imágenes legacy del diseño/variante", e);
+            log.warn("No se pudieron cargar diseno_imagenes; se usan columnas legacy del diseño", e);
         }
 
         Map<Long, List<DisenoImagenEntity>> fotosFinal = fotosByDiseno;
@@ -168,19 +150,9 @@ public class CatalogQueryService {
             if (imagenes.isEmpty()) {
                 String full = d.getImagenUrl();
                 String thumb = d.getImagenThumbUrl();
-                if (full == null || full.isBlank()) {
-                    Long vid = sampleVarianteByDiseno.get(d.getId());
-                    VarianteImagenEntity img = vid == null ? null : imageByVariante.get(vid);
-                    full = img == null ? null : img.getUrl();
-                    thumb = img == null ? null : img.getUrlThumb();
-                } else {
-                    full = full.trim();
-                    thumb = thumb == null || thumb.isBlank() ? null : thumb.trim();
-                }
-                if (thumb == null || thumb.isBlank()) {
-                    thumb = full;
-                }
                 if (full != null && !full.isBlank()) {
+                    full = full.trim();
+                    thumb = thumb == null || thumb.isBlank() ? full : thumb.trim();
                     imagenes.add(new DisenoImagenCardDto(full, thumb));
                 }
             }
@@ -193,6 +165,7 @@ public class CatalogQueryService {
                     d.getDescripcion(),
                     d.getOrden(),
                     normalizeProductoSeccion(d.getSeccion()),
+                    normalizeMotor(d.getMotor()),
                     full,
                     thumb,
                     imagenes,
@@ -216,6 +189,13 @@ public class CatalogQueryService {
             case "acetato", "cartulina", "mdf", "carton" -> s;
             default -> "cartulina";
         };
+    }
+
+    static String normalizeMotor(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "cartulina_tapa";
+        }
+        return raw.trim().toLowerCase().replace('-', '_');
     }
 
     private static int seccionOrden(String seccion) {
@@ -478,14 +458,12 @@ public class CatalogQueryService {
         Map<Long, List<PrecioEntity>> precios = groupBy(
                 precioRepository.findByVarianteIdInOrderByCantidadDesdeAsc(ids),
                 PrecioEntity::getVarianteId);
-        Map<Long, List<VarianteImagenEntity>> imagenes = groupBy(
-                varianteImagenRepository.findByVarianteIdInOrderByPrincipalDescOrdenAscIdAsc(ids),
-                VarianteImagenEntity::getVarianteId);
 
+        // Listados de medidas: sin foto por SKU (la galería vive en el diseño).
         return variantes.stream()
                 .map(v -> toCard(v, disenos.get(v.getDisenoId()), medidas.get(v.getMedidaId()),
                         precios.getOrDefault(v.getId(), List.of()),
-                        imagenes.getOrDefault(v.getId(), List.of()),
+                        List.of(),
                         List.of()))
                 .toList();
     }
@@ -501,8 +479,41 @@ public class CatalogQueryService {
                 : medidaRepository.findById(variante.getMedidaId()).orElse(null);
         return toCard(variante, diseno, medida,
                 precioRepository.findByVarianteIdOrderByCantidadDesdeAsc(variante.getId()),
-                varianteImagenRepository.findByVarianteIdOrderByPrincipalDescOrdenAscIdAsc(variante.getId()),
-                loadTexturasForVariante(variante.getId()));
+                loadTexturasForVariante(variante.getId()),
+                loadDisenoImagenes(diseno));
+    }
+
+    private List<DisenoImagenCardDto> loadDisenoImagenes(DisenoEntity diseno) {
+        if (diseno == null || diseno.getId() == null) {
+            return List.of();
+        }
+        List<DisenoImagenCardDto> out = new ArrayList<>();
+        try {
+            for (DisenoImagenEntity img : disenoImagenRepository
+                    .findByDisenoIdInOrderByPrincipalDescOrdenAscIdAsc(List.of(diseno.getId()))) {
+                String full = img.getUrl();
+                String thumb = img.getUrlThumb();
+                if (thumb == null || thumb.isBlank()) {
+                    thumb = full;
+                }
+                if (full != null && !full.isBlank()) {
+                    out.add(new DisenoImagenCardDto(full.trim(), thumb == null ? null : thumb.trim()));
+                }
+            }
+        } catch (DataAccessException e) {
+            log.warn("No se pudieron cargar fotos del diseño {} para el detalle de producto", diseno.getId(), e);
+        }
+        if (out.isEmpty()) {
+            String full = diseno.getImagenUrl();
+            String thumb = diseno.getImagenThumbUrl();
+            if (full != null && !full.isBlank()) {
+                if (thumb == null || thumb.isBlank()) {
+                    thumb = full;
+                }
+                out.add(new DisenoImagenCardDto(full.trim(), thumb.trim()));
+            }
+        }
+        return out;
     }
 
     private List<ProductTexturaDto> loadTexturasForVariante(Long varianteId) {
@@ -551,25 +562,14 @@ public class CatalogQueryService {
                                   DisenoEntity diseno,
                                   MedidaEntity medida,
                                   List<PrecioEntity> precios,
-                                  List<VarianteImagenEntity> imagenes,
-                                  List<ProductTexturaDto> texturas) {
+                                  List<ProductTexturaDto> texturas,
+                                  List<DisenoImagenCardDto> disenoImagenes) {
         String dims = dims(medida);
         String nombreDiseno = diseno == null ? "" : nullToEmpty(diseno.getNombre());
         String nombre = dims.isEmpty() ? nombreDiseno : (nombreDiseno + " " + dims).trim();
+        // El SKU no tiene foto propia; la galería del diseño va en disenoImagenes (detalle).
         String image = null;
         String imageThumb = null;
-        if (!imagenes.isEmpty()) {
-            VarianteImagenEntity principal = imagenes.getFirst();
-            image = principal.getUrl();
-            imageThumb = principal.getUrlThumb();
-            if (imageThumb == null || imageThumb.isBlank()) {
-                imageThumb = image;
-            }
-        } else if (texturas != null && !texturas.isEmpty()) {
-            ProductTexturaDto first = texturas.getFirst();
-            image = first.image();
-            imageThumb = first.imageThumb();
-        }
 
         List<ProductVariantDto> variants = precios.isEmpty()
                 ? List.of(new ProductVariantDto(dims, "", BigDecimal.ZERO, null))
@@ -591,7 +591,8 @@ public class CatalogQueryService {
                 image,
                 imageThumb,
                 variants,
-                texturas == null ? List.of() : texturas);
+                texturas == null ? List.of() : texturas,
+                disenoImagenes == null ? List.of() : disenoImagenes);
     }
 
     private List<IdeaDto> toIdeaDtos(List<IdeaEntity> ideas, boolean includeVariantes) {

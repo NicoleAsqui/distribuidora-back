@@ -32,6 +32,8 @@ public class CatalogSchemaMigrationRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         runScript("007_diseno_imagenes.sql");
         runScript("008_texturas_cartulina.sql");
+        runScript("009_pricing_quote_edit_token.sql");
+        runScript("010_diseno_motor.sql");
     }
 
     private void runScript(String name) {

@@ -51,6 +51,10 @@ public class PricingQuoteEntity {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal total;
 
+    /** Enlace seguro para editar precios desde el correo al admin. */
+    @Column(name = "edit_token")
+    private String editToken;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getCode() { return code; }
@@ -75,4 +79,6 @@ public class PricingQuoteEntity {
     public void setNotes(String notes) { this.notes = notes; }
     public BigDecimal getTotal() { return total; }
     public void setTotal(BigDecimal total) { this.total = total; }
+    public String getEditToken() { return editToken; }
+    public void setEditToken(String editToken) { this.editToken = editToken; }
 }

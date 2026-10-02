@@ -41,6 +41,13 @@ public class DisenoEntity {
     @Column(nullable = false, length = 32)
     private String seccion = "cartulina";
 
+    /**
+     * Id del motor de cotización (quote-engine), p.ej. cartulina_tapa, mdf_hexagono.
+     * Define la fórmula de precios/cortes de este diseño.
+     */
+    @Column(nullable = false, length = 64)
+    private String motor = "cartulina_tapa";
+
     /** Foto del modelo en catálogo (full, GCS). */
     @Column(name = "imagen_url")
     private String imagenUrl;

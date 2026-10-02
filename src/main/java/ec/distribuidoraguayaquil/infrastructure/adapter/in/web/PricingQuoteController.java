@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.JacksonException;
@@ -53,7 +54,9 @@ public class PricingQuoteController {
 
     @PostMapping
     public Map<String, Object> create(@RequestBody Map<String, Object> body) {
-        PricingQuoteEntity saved = repository.save(fromBody(body, true));
+        PricingQuoteEntity e = fromBody(body, true);
+        e.setEditToken(UUID.randomUUID().toString());
+        PricingQuoteEntity saved = repository.save(e);
         quoteAdminMailService.notifyAdminNewWebQuote(saved);
         Map<String, Object> map = toMap(saved);
         // Cliente web: no devolver precios en la respuesta
@@ -70,7 +73,66 @@ public class PricingQuoteController {
         body.put("id", id);
         body.putIfAbsent("code", existing.getCode());
         body.putIfAbsent("createdAt", existing.getCreatedAt().toString());
-        return toMap(repository.save(fromBody(body, false)));
+        body.putIfAbsent("source", existing.getSource());
+        body.putIfAbsent("clientName", existing.getClientName());
+        body.putIfAbsent("clientPhone", existing.getClientPhone());
+        body.putIfAbsent("clientEmail", existing.getClientEmail());
+        body.putIfAbsent("deliveryDate", existing.getDeliveryDate());
+        body.putIfAbsent("status", existing.getStatus());
+        body.putIfAbsent("notes", existing.getNotes());
+        PricingQuoteEntity e = fromBody(body, false);
+        e.setEditToken(ensureEditToken(existing));
+        return toMap(repository.save(e));
+    }
+
+    /** Desde el correo: cargar cotización completa (con precios) con token. */
+    @GetMapping("/public-edit/{id}")
+    public Map<String, Object> getForPublicEdit(@PathVariable String id, @RequestParam String token) {
+        PricingQuoteEntity e = requireByEditToken(id, token);
+        return toMap(e);
+    }
+
+    /** Desde el correo: actualizar solo ítems/precios/total; conserva cliente y medidas. */
+    @PutMapping("/public-edit/{id}")
+    public Map<String, Object> savePublicEdit(
+            @PathVariable String id,
+            @RequestParam String token,
+            @RequestBody Map<String, Object> body) {
+        PricingQuoteEntity existing = requireByEditToken(id, token);
+        try {
+            Object items = body.get("items");
+            existing.setItemsJson(objectMapper.writeValueAsString(items == null ? List.of() : items));
+        } catch (JacksonException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "items inválidos");
+        }
+        Object total = body.get("total");
+        if (total != null) {
+            existing.setTotal(new BigDecimal(String.valueOf(total)));
+        }
+        if (body.containsKey("notes")) {
+            existing.setNotes(asString(body.get("notes")));
+        }
+        return toMap(repository.save(existing));
+    }
+
+    private PricingQuoteEntity requireByEditToken(String id, String token) {
+        if (token == null || token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token requerido");
+        }
+        PricingQuoteEntity e = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        String expected = e.getEditToken();
+        if (expected == null || expected.isBlank() || !expected.equals(token.trim())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Enlace de edición inválido");
+        }
+        return e;
+    }
+
+    private static String ensureEditToken(PricingQuoteEntity existing) {
+        if (existing.getEditToken() != null && !existing.getEditToken().isBlank()) {
+            return existing.getEditToken();
+        }
+        return UUID.randomUUID().toString();
     }
 
     @PutMapping("/{id}/status")
