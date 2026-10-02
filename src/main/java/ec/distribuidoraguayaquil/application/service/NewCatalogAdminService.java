@@ -10,6 +10,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.CostoComponenteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoImagenEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoTexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.GramajeEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
@@ -27,7 +28,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteTagEntity;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteTexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PapelForroEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.AtributoRepository;
@@ -38,6 +38,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.CostoComponenteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoTexturaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.GramajeRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaRepository;
@@ -56,7 +57,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTagRepository;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTexturaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -90,6 +90,7 @@ public class NewCatalogAdminService {
 
     private final DisenoRepository disenoRepository;
     private final DisenoImagenRepository disenoImagenRepository;
+    private final DisenoTexturaRepository disenoTexturaRepository;
     private final MedidaRepository medidaRepository;
     private final VarianteRepository varianteRepository;
     private final VarianteImagenRepository varianteImagenRepository;
@@ -114,7 +115,6 @@ public class NewCatalogAdminService {
     private final TagRepository tagRepository;
     private final VarianteTagRepository varianteTagRepository;
     private final TexturaRepository texturaRepository;
-    private final VarianteTexturaRepository varianteTexturaRepository;
     private final CostoComponenteRepository costoComponenteRepository;
 
     // ------------------------------------------------------------------ diseños
@@ -216,6 +216,60 @@ public class NewCatalogAdminService {
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "No se pueden guardar fotos del diseño: falta la tabla diseno_imagenes en la base de datos. "
                         + "Aplica la migración sql/007_diseno_imagenes.sql.");
+    }
+
+    @Transactional(readOnly = true)
+    public List<DisenoTexturaEntity> listDisenoTexturas(Long disenoId) {
+        find(disenoRepository, disenoId, "Diseño");
+        try {
+            return disenoTexturaRepository.findByDisenoIdOrderByOrdenAscIdAsc(disenoId);
+        } catch (DataAccessException e) {
+            log.warn("No se pudieron listar texturas del diseño {} (¿falta migración diseno_texturas?)", disenoId, e);
+            return List.of();
+        }
+    }
+
+    public void syncDisenoTexturas(Long disenoId, List<ProductoAdminDto.TexturaLine> lines) {
+        find(disenoRepository, disenoId, "Diseño");
+        List<ProductoAdminDto.TexturaLine> safe = lines == null ? List.of() : lines;
+        try {
+            disenoTexturaRepository.deleteByDisenoId(disenoId);
+            disenoTexturaRepository.flush();
+        } catch (DataAccessException e) {
+            throw disenoTexturasUnavailable(e);
+        }
+        Set<Long> seen = new HashSet<>();
+        int i = 0;
+        for (ProductoAdminDto.TexturaLine line : safe) {
+            if (line == null || line.texturaId() == null || line.url() == null || line.url().isBlank()) {
+                continue;
+            }
+            if (!seen.add(line.texturaId())) {
+                throw badRequest("Textura duplicada en el diseño");
+            }
+            requireFk(texturaRepository, line.texturaId(), "texturaId");
+            DisenoTexturaEntity e = new DisenoTexturaEntity();
+            e.setDisenoId(disenoId);
+            e.setTexturaId(line.texturaId());
+            e.setUrl(line.url().trim());
+            String thumb = line.urlThumb();
+            e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
+            e.setOrden(nvl(line.orden(), i));
+            try {
+                disenoTexturaRepository.save(e);
+            } catch (DataAccessException ex) {
+                throw disenoTexturasUnavailable(ex);
+            }
+            i++;
+        }
+    }
+
+    private static ResponseStatusException disenoTexturasUnavailable(DataAccessException e) {
+        log.error("Tabla diseno_texturas no disponible", e);
+        return new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "No se pueden guardar texturas del diseño: falta la tabla diseno_texturas en la base de datos. "
+                        + "Aplica la migración sql/011_diseno_texturas.sql.");
     }
 
     private void applyDiseno(DisenoEntity e, DisenoEntity body) {
@@ -432,8 +486,7 @@ public class NewCatalogAdminService {
 
     private void syncProductoChildren(Long varianteId, ProductoAdminDto body) {
         syncPrecios(varianteId, body.precios() == null ? List.of() : body.precios());
-        // Fotos del modelo viven en el diseño; no sincronizar variante_imagenes desde el admin de productos.
-        syncTexturas(varianteId, body.texturas() == null ? List.of() : body.texturas());
+        // Fotos y texturas viven en el diseño; no sincronizar desde el admin de productos.
         syncComponentes(varianteId, body.componentes() == null ? List.of() : body.componentes());
         syncTags(varianteId, body.tagIds() == null ? List.of() : body.tagIds());
     }
@@ -479,31 +532,6 @@ public class NewCatalogAdminService {
             e.setPrincipal(nvl(line.principal(), i == 0));
             e.setOrden(nvl(line.orden(), i));
             varianteImagenRepository.save(e);
-            i++;
-        }
-    }
-
-    private void syncTexturas(Long varianteId, List<ProductoAdminDto.TexturaLine> lines) {
-        varianteTexturaRepository.deleteByVarianteId(varianteId);
-        varianteTexturaRepository.flush();
-        Set<Long> seen = new HashSet<>();
-        int i = 0;
-        for (ProductoAdminDto.TexturaLine line : lines) {
-            if (line == null || line.texturaId() == null || line.url() == null || line.url().isBlank()) {
-                continue;
-            }
-            if (!seen.add(line.texturaId())) {
-                throw badRequest("Textura duplicada en el producto");
-            }
-            requireFk(texturaRepository, line.texturaId(), "texturaId");
-            VarianteTexturaEntity e = new VarianteTexturaEntity();
-            e.setVarianteId(varianteId);
-            e.setTexturaId(line.texturaId());
-            e.setUrl(line.url().trim());
-            String thumb = line.urlThumb();
-            e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
-            e.setOrden(nvl(line.orden(), i));
-            varianteTexturaRepository.save(e);
             i++;
         }
     }
@@ -562,11 +590,7 @@ public class NewCatalogAdminService {
         for (VarianteTagEntity t : varianteTagRepository.findByVarianteId(id)) {
             tagIds.add(t.getTagId());
         }
-        List<ProductoAdminDto.TexturaLine> texturas = new ArrayList<>();
-        for (VarianteTexturaEntity vt : varianteTexturaRepository.findByVarianteIdOrderByOrdenAscIdAsc(id)) {
-            texturas.add(new ProductoAdminDto.TexturaLine(
-                    vt.getId(), vt.getTexturaId(), vt.getUrl(), vt.getUrlThumb(), vt.getOrden()));
-        }
+        List<ProductoAdminDto.TexturaLine> texturas = List.of();
         MedidaEntity medida = v.getMedidaId() == null
                 ? null
                 : medidaRepository.findById(v.getMedidaId()).orElse(null);

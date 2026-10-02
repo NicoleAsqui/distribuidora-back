@@ -10,6 +10,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.Produ
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductVariantDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoImagenEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoTexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaVarianteEntity;
@@ -18,10 +19,10 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.c
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.PrecioEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.TexturaEntity;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VarianteTexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.VinilEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoTexturaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaImagenRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.IdeaVarianteRepository;
@@ -29,7 +30,6 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.reposito
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PapelForroRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.PrecioRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.TexturaRepository;
-import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteTexturaRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VinilRepository;
 import lombok.RequiredArgsConstructor;
@@ -74,10 +74,10 @@ public class CatalogQueryService {
 
     private final DisenoRepository disenoRepository;
     private final DisenoImagenRepository disenoImagenRepository;
+    private final DisenoTexturaRepository disenoTexturaRepository;
     private final MedidaRepository medidaRepository;
     private final VarianteRepository varianteRepository;
     private final PrecioRepository precioRepository;
-    private final VarianteTexturaRepository varianteTexturaRepository;
     private final TexturaRepository texturaRepository;
     private final PapelForroRepository papelForroRepository;
     private final VinilRepository vinilRepository;
@@ -479,7 +479,7 @@ public class CatalogQueryService {
                 : medidaRepository.findById(variante.getMedidaId()).orElse(null);
         return toCard(variante, diseno, medida,
                 precioRepository.findByVarianteIdOrderByCantidadDesdeAsc(variante.getId()),
-                loadTexturasForVariante(variante.getId()),
+                loadTexturasForDiseno(diseno),
                 loadDisenoImagenes(diseno));
     }
 
@@ -516,17 +516,21 @@ public class CatalogQueryService {
         return out;
     }
 
-    private List<ProductTexturaDto> loadTexturasForVariante(Long varianteId) {
+    private List<ProductTexturaDto> loadTexturasForDiseno(DisenoEntity diseno) {
+        if (diseno == null || diseno.getId() == null) {
+            return List.of();
+        }
         try {
-            List<VarianteTexturaEntity> links = varianteTexturaRepository.findByVarianteIdOrderByOrdenAscIdAsc(varianteId);
+            List<DisenoTexturaEntity> links =
+                    disenoTexturaRepository.findByDisenoIdOrderByOrdenAscIdAsc(diseno.getId());
             if (links.isEmpty()) {
                 return List.of();
             }
             Map<Long, TexturaEntity> texturas = byId(
-                    texturaRepository.findByIdIn(links.stream().map(VarianteTexturaEntity::getTexturaId).toList()),
+                    texturaRepository.findByIdIn(links.stream().map(DisenoTexturaEntity::getTexturaId).toList()),
                     TexturaEntity::getId);
             List<ProductTexturaDto> out = new ArrayList<>();
-            for (VarianteTexturaEntity link : links) {
+            for (DisenoTexturaEntity link : links) {
                 TexturaEntity t = texturas.get(link.getTexturaId());
                 if (t == null) {
                     continue;
@@ -553,7 +557,7 @@ public class CatalogQueryService {
             }
             return out;
         } catch (DataAccessException e) {
-            log.warn("No se pudieron cargar texturas del producto {}", varianteId, e);
+            log.warn("No se pudieron cargar texturas del diseño {}", diseno.getId(), e);
             return List.of();
         }
     }

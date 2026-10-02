@@ -5,6 +5,7 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaA
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductoAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoImagenEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoTexturaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaImagenEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.IdeaVarianteEntity;
@@ -75,6 +76,16 @@ public class NewCatalogAdminController {
     @PutMapping("/disenos/{id}/fotos")
     public void syncDisenoFotos(@PathVariable Long id, @RequestBody List<ProductoAdminDto.ImagenLine> body) {
         service.syncDisenoImagenes(id, body);
+    }
+
+    @GetMapping("/disenos/{id}/texturas")
+    public List<DisenoTexturaEntity> listDisenoTexturas(@PathVariable Long id) {
+        return service.listDisenoTexturas(id);
+    }
+
+    @PutMapping("/disenos/{id}/texturas")
+    public void syncDisenoTexturas(@PathVariable Long id, @RequestBody List<ProductoAdminDto.TexturaLine> body) {
+        service.syncDisenoTexturas(id, body);
     }
 
     // ------------------------------------------------------------------ medidas
