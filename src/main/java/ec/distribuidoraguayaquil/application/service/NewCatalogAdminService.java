@@ -279,6 +279,7 @@ public class NewCatalogAdminService {
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
         e.setSeccion(normalizeDisenoSeccion(body.getSeccion()));
         e.setMotor(normalizeDisenoMotor(body.getMotor(), e.getSeccion()));
+        e.setVideoUrl(blank(body.getVideoUrl()) ? null : body.getVideoUrl().trim());
         if (body.getImagenUrl() != null || body.getImagenThumbUrl() != null) {
             e.setImagenUrl(blank(body.getImagenUrl()) ? null : body.getImagenUrl().trim());
             e.setImagenThumbUrl(blank(body.getImagenThumbUrl()) ? null : body.getImagenThumbUrl().trim());

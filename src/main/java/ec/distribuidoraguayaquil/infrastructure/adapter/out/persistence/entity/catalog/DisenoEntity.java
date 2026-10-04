@@ -55,4 +55,8 @@ public class DisenoEntity {
     /** Miniatura para grillas de modelos. */
     @Column(name = "imagen_thumb_url")
     private String imagenThumbUrl;
+
+    /** Reel / video Instagram del modelo (permalink). Opcional. */
+    @Column(name = "video_url", columnDefinition = "TEXT")
+    private String videoUrl;
 }

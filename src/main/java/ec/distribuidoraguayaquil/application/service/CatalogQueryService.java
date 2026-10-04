@@ -169,7 +169,8 @@ public class CatalogQueryService {
                     full,
                     thumb,
                     imagenes,
-                    n
+                    n,
+                    blankToNull(d.getVideoUrl())
             );
         }).collect(Collectors.toCollection(ArrayList::new));
 
@@ -669,6 +670,14 @@ public class CatalogQueryService {
 
     private static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String t = value.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private static List<Long> ids(List<VarianteEntity> variantes) {

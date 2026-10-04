@@ -14,6 +14,8 @@ public record DisenoCardDto(
         String image,
         String imageThumb,
         java.util.List<DisenoImagenCardDto> imagenes,
-        long medidasCount
+        long medidasCount,
+        /** Permalink Instagram reel/post del modelo (opcional). */
+        String videoUrl
 ) {
 }
