@@ -51,4 +51,13 @@ public class ProductImageUploadController {
     public Map<String, String> uploadQuotePdf(@RequestParam("file") MultipartFile file) {
         return uploadService.uploadPdf(file, "cotizaciones");
     }
+
+    /**
+     * Video del diseño (admin) para reproducir en la web. Multipart campo {@code file}.
+     * Respuesta: {@code { url, objectPath }}.
+     */
+    @PostMapping("/diseno-videos")
+    public Map<String, String> uploadDisenoVideo(@RequestParam("file") MultipartFile file) {
+        return uploadService.uploadVideo(file, "diseno-videos");
+    }
 }

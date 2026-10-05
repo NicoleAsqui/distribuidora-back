@@ -13,8 +13,9 @@ spring:
     name: distribuidora-back
   servlet:
     multipart:
-      max-file-size: 18MB
-      max-request-size: 20MB
+      # Videos de diseño (mp4) + imágenes; reels suelen pesar más que fotos.
+      max-file-size: 40MB
+      max-request-size: 42MB
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}

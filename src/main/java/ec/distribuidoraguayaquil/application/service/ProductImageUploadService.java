@@ -97,6 +97,76 @@ public class ProductImageUploadService {
     }
 
     /**
+     * Sube un video (mp4/webm/quicktime) para reproducir en la web (no Instagram embed).
+     * Multipart campo {@code file}. Respuesta: {@code { url, objectPath }}.
+     */
+    public Map<String, String> uploadVideo(MultipartFile file, String folderOverride) {
+        if (!gcsProperties.isConfigured()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "GCS no configurado: define GCS_BUCKET_NAME");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta el campo multipart \"file\"");
+        }
+        try {
+            byte[] bytes = file.getBytes();
+            if (bytes.length > 40 * 1024 * 1024) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Video demasiado grande (máx. 40 MB)");
+            }
+            String contentType = resolveVideoContentType(file, bytes);
+            if (contentType == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Solo se permiten videos MP4, WebM o MOV");
+            }
+            String ext = switch (contentType) {
+                case "video/webm" -> ".webm";
+                case "video/quicktime" -> ".mov";
+                default -> ".mp4";
+            };
+            String baseName = sanitizeBaseName(file.getOriginalFilename());
+            if (baseName.isBlank() || "image".equals(baseName)) {
+                baseName = "video-" + UUID.randomUUID().toString().substring(0, 8);
+            }
+            LocalDate now = LocalDate.now();
+            String root = gcsProperties.getUploadPrefix().replaceAll("/$", "");
+            String folder = (folderOverride == null || folderOverride.isBlank()) ? "diseno-videos" : folderOverride.trim();
+            root = root + "/" + folder.replaceAll("^/+|/+$", "");
+            String objectPath = root + "/" + now.getYear() + "/" + String.format("%02d", now.getMonthValue())
+                    + "/" + baseName + ext;
+            BlobInfo info = BlobInfo.newBuilder(gcsProperties.getBucketName(), objectPath)
+                    .setContentType(contentType)
+                    .setContentDisposition("inline")
+                    .setCacheControl(gcsProperties.getCacheControl())
+                    .build();
+            storage.create(info, bytes);
+            String url = gcsProperties.publicBase() + "/" + objectPath;
+            return Map.of("url", url, "objectPath", objectPath);
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "No se pudo subir el video: " + e.getMessage(), e);
+        }
+    }
+
+    private static String resolveVideoContentType(MultipartFile file, byte[] bytes) {
+        String raw = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT).split(";")[0].trim();
+        if (raw.startsWith("video/mp4") || "video/mpeg".equals(raw)) return "video/mp4";
+        if ("video/webm".equals(raw)) return "video/webm";
+        if ("video/quicktime".equals(raw)) return "video/quicktime";
+        String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".mp4") || name.endsWith(".m4v")) return "video/mp4";
+        if (name.endsWith(".webm")) return "video/webm";
+        if (name.endsWith(".mov")) return "video/quicktime";
+        // ftyp....mp4 / isom
+        if (bytes != null && bytes.length >= 12
+                && bytes[4] == 'f' && bytes[5] == 't' && bytes[6] == 'y' && bytes[7] == 'p') {
+            return "video/mp4";
+        }
+        return null;
+    }
+
+    /**
      * Sube un PDF de cotización (checkout) a GCS. Multipart campo {@code file}.
      * Respuesta: {@code { url, objectPath }}.
      */
