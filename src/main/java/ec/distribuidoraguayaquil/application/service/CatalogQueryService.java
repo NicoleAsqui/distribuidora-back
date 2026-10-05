@@ -315,8 +315,8 @@ public class CatalogQueryService {
      * @param ideaSlug        filtra por variantes vinculadas a la idea (opcional)
      * @param includeInactive incluye variantes inactivas (uso admin)
      * @param q               búsqueda por modelo (SKU / nombre de diseño)
-     * @param largoCm         filtro exacto de largo en cm (opcional)
-     * @param anchoCm         filtro exacto de ancho en cm (opcional)
+     * @param largoCm         lado de la base en cm (opcional; intercambiable con ancho)
+     * @param anchoCm         lado de la base en cm (opcional; intercambiable con largo)
      * @param altoCm          filtro exacto de alto en cm (opcional)
      * @param page            página 0-based
      * @param size            tamaño de página (1..100); con onlyTop se ignora

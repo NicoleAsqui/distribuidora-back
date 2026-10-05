@@ -21,6 +21,28 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
 
     long countByActivoTrue();
 
+    /**
+     * Productos del mismo diseño cuya medida coincide en alto y en la base
+     * (largo×ancho o ancho×largo).
+     */
+    @Query("""
+            SELECT v FROM VarianteEntity v, MedidaEntity m
+            WHERE v.disenoId = :disenoId
+              AND v.medidaId = m.id
+              AND m.alto = :alto
+              AND LOWER(m.unidad) = LOWER(:unidad)
+              AND (
+                (m.largo = :largo AND m.ancho = :ancho)
+                OR (m.largo = :ancho AND m.ancho = :largo)
+              )
+            """)
+    List<VarianteEntity> findByDisenoIdAndEquivalentMedida(
+            @Param("disenoId") Long disenoId,
+            @Param("largo") BigDecimal largo,
+            @Param("ancho") BigDecimal ancho,
+            @Param("alto") BigDecimal alto,
+            @Param("unidad") String unidad);
+
     /** Último SKU del patrón DG-#### (mayor número). */
     @Query(value = """
             SELECT sku FROM variantes
@@ -49,9 +71,16 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
                 OR LOWER(COALESCE(d.nombre, '')) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(COALESCE(d.slug, '')) LIKE LOWER(CONCAT('%', :q, '%'))
               )
-              AND (:largo IS NULL OR m.largo = :largo)
-              AND (:ancho IS NULL OR m.ancho = :ancho)
               AND (:alto IS NULL OR m.alto = :alto)
+              AND (
+                (:largo IS NULL AND :ancho IS NULL)
+                OR (:largo IS NOT NULL AND :ancho IS NOT NULL AND (
+                      (m.largo = :largo AND m.ancho = :ancho)
+                      OR (m.largo = :ancho AND m.ancho = :largo)
+                    ))
+                OR (:largo IS NOT NULL AND :ancho IS NULL AND (m.largo = :largo OR m.ancho = :largo))
+                OR (:largo IS NULL AND :ancho IS NOT NULL AND (m.largo = :ancho OR m.ancho = :ancho))
+              )
             ORDER BY LOWER(COALESCE(d.nombre, '')) ASC, v.id ASC
             """)
     Page<VarianteEntity> pageByFilters(
@@ -88,9 +117,16 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
                 OR LOWER(COALESCE(d.nombre, '')) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(COALESCE(d.slug, '')) LIKE LOWER(CONCAT('%', :q, '%'))
               )
-              AND (:largo IS NULL OR m.largo = :largo)
-              AND (:ancho IS NULL OR m.ancho = :ancho)
               AND (:alto IS NULL OR m.alto = :alto)
+              AND (
+                (:largo IS NULL AND :ancho IS NULL)
+                OR (:largo IS NOT NULL AND :ancho IS NOT NULL AND (
+                      (m.largo = :largo AND m.ancho = :ancho)
+                      OR (m.largo = :ancho AND m.ancho = :largo)
+                    ))
+                OR (:largo IS NOT NULL AND :ancho IS NULL AND (m.largo = :largo OR m.ancho = :largo))
+                OR (:largo IS NULL AND :ancho IS NOT NULL AND (m.largo = :ancho OR m.ancho = :ancho))
+              )
             """)
     List<Long> filterIdsByQuery(
             @Param("ids") Collection<Long> ids,

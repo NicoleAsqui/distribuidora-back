@@ -324,14 +324,40 @@ public class NewCatalogAdminService {
     }
 
     public MedidaEntity createMedida(MedidaEntity body) {
+        BigDecimal l = scaleDim(requiredNumber(body.getLargo(), "largo"));
+        BigDecimal a = scaleDim(requiredNumber(body.getAncho(), "ancho"));
+        BigDecimal h = scaleDim(requiredNumber(body.getAlto(), "alto"));
+        String u = blank(body.getUnidad()) ? "cm" : body.getUnidad().trim();
+        requirePositiveDims(l, a, h);
+        List<MedidaEntity> existing = medidaRepository.findEquivalentBaseAndAltoAndUnidad(l, a, h, u);
+        if (!existing.isEmpty()) {
+            MedidaEntity m = existing.get(0);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ya existe la medida " + m.getLargo() + "×" + m.getAncho() + "×" + m.getAlto()
+                            + " " + m.getUnidad() + " (largo y ancho son intercambiables).");
+        }
         MedidaEntity e = new MedidaEntity();
-        applyMedida(e, body);
+        applyNormalizedMedida(e, l, a, h, u);
         return medidaRepository.save(e);
     }
 
     public MedidaEntity updateMedida(Long id, MedidaEntity body) {
         MedidaEntity e = find(medidaRepository, id, "Medida");
-        applyMedida(e, body);
+        BigDecimal l = scaleDim(requiredNumber(body.getLargo(), "largo"));
+        BigDecimal a = scaleDim(requiredNumber(body.getAncho(), "ancho"));
+        BigDecimal h = scaleDim(requiredNumber(body.getAlto(), "alto"));
+        String u = blank(body.getUnidad()) ? "cm" : body.getUnidad().trim();
+        requirePositiveDims(l, a, h);
+        for (MedidaEntity other : medidaRepository.findEquivalentBaseAndAltoAndUnidad(l, a, h, u)) {
+            if (!other.getId().equals(id)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Ya existe la medida " + other.getLargo() + "×" + other.getAncho() + "×" + other.getAlto()
+                                + " " + other.getUnidad() + " (largo y ancho son intercambiables).");
+            }
+        }
+        applyNormalizedMedida(e, l, a, h, u);
         return medidaRepository.save(e);
     }
 
@@ -339,11 +365,23 @@ public class NewCatalogAdminService {
         delete(medidaRepository, id, "Medida");
     }
 
-    private void applyMedida(MedidaEntity e, MedidaEntity body) {
-        e.setLargo(requiredNumber(body.getLargo(), "largo"));
-        e.setAncho(requiredNumber(body.getAncho(), "ancho"));
-        e.setAlto(requiredNumber(body.getAlto(), "alto"));
-        e.setUnidad(blank(body.getUnidad()) ? "cm" : body.getUnidad().trim());
+    /** Guarda base mayor como largo y menor como ancho (misma caja física). */
+    private static void applyNormalizedMedida(
+            MedidaEntity e, BigDecimal ladoA, BigDecimal ladoB, BigDecimal alto, String unidad) {
+        e.setLargo(ladoA.max(ladoB));
+        e.setAncho(ladoA.min(ladoB));
+        e.setAlto(alto);
+        e.setUnidad(unidad);
+    }
+
+    private static BigDecimal scaleDim(BigDecimal v) {
+        return v.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private static void requirePositiveDims(BigDecimal largo, BigDecimal ancho, BigDecimal alto) {
+        if (largo.signum() <= 0 || ancho.signum() <= 0 || alto.signum() <= 0) {
+            throw badRequest("largo, ancho y alto deben ser mayores a 0");
+        }
     }
 
     // ---------------------------------------------------------------- variantes
@@ -460,21 +498,25 @@ public class NewCatalogAdminService {
         e.setActivo(nvl(body.activo(), Boolean.TRUE));
     }
 
-    /** Un diseño no puede tener dos productos con la misma medida. */
+    /**
+     * Un diseño no puede tener dos productos con la misma caja:
+     * largo×ancho×alto ≡ ancho×largo×alto.
+     */
     private void ensureUniqueDisenoMedida(Long disenoId, Long medidaId, Long excludeVarianteId) {
-        varianteRepository.findByDisenoIdAndMedidaId(disenoId, medidaId).ifPresent(other -> {
+        MedidaEntity m = medidaRepository.findById(medidaId)
+                .orElseThrow(() -> badRequest("Medida no encontrada"));
+        for (VarianteEntity other : varianteRepository.findByDisenoIdAndEquivalentMedida(
+                disenoId, m.getLargo(), m.getAncho(), m.getAlto(), m.getUnidad())) {
             if (excludeVarianteId != null && excludeVarianteId.equals(other.getId())) {
-                return;
+                continue;
             }
-            MedidaEntity m = medidaRepository.findById(medidaId).orElse(null);
-            String dims = m == null
-                    ? "esa medida"
-                    : m.getLargo() + "×" + m.getAncho() + "×" + m.getAlto() + " " + m.getUnidad();
+            String dims = m.getLargo() + "×" + m.getAncho() + "×" + m.getAlto() + " " + m.getUnidad();
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Ya existe el producto " + other.getSku() + " con " + dims
-                            + " en este diseño. Usa otra medida o edita " + other.getSku() + ".");
-        });
+                            + " en este diseño (largo y ancho son intercambiables). Usa otra medida o edita "
+                            + other.getSku() + ".");
+        }
     }
 
     private static ResponseStatusException productoConflict(DataIntegrityViolationException e) {
@@ -512,22 +554,19 @@ public class NewCatalogAdminService {
         if (largo == null || ancho == null || alto == null) {
             throw badRequest("largo, ancho y alto son obligatorios");
         }
-        if (largo.signum() <= 0 || ancho.signum() <= 0 || alto.signum() <= 0) {
-            throw badRequest("largo, ancho y alto deben ser mayores a 0");
-        }
-        BigDecimal l = largo.setScale(2, java.math.RoundingMode.HALF_UP);
-        BigDecimal a = ancho.setScale(2, java.math.RoundingMode.HALF_UP);
-        BigDecimal h = alto.setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal l = scaleDim(largo);
+        BigDecimal a = scaleDim(ancho);
+        BigDecimal h = scaleDim(alto);
+        requirePositiveDims(l, a, h);
         String u = blank(unidad) ? "cm" : unidad.trim();
-        return medidaRepository.findFirstByLargoAndAnchoAndAltoAndUnidad(l, a, h, u)
-                .orElseGet(() -> {
-                    MedidaEntity e = new MedidaEntity();
-                    e.setLargo(l);
-                    e.setAncho(a);
-                    e.setAlto(h);
-                    e.setUnidad(u);
-                    return medidaRepository.save(e);
-                });
+        // Reutiliza 10×25×5 si ya existe como 25×10×5 (misma caja).
+        List<MedidaEntity> existing = medidaRepository.findEquivalentBaseAndAltoAndUnidad(l, a, h, u);
+        if (!existing.isEmpty()) {
+            return existing.get(0);
+        }
+        MedidaEntity e = new MedidaEntity();
+        applyNormalizedMedida(e, l, a, h, u);
+        return medidaRepository.save(e);
     }
 
     private void syncProductoChildren(Long varianteId, ProductoAdminDto body) {
