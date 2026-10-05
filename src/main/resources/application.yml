@@ -1,5 +1,8 @@
 server:
   port: ${PORT:8080}
+  error:
+    # Para que 409/400 del admin muestren el motivo real (ej. medida duplicada).
+    include-message: always
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript

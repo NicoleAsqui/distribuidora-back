@@ -14,6 +14,7 @@ import java.util.Optional;
 
 public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> {
     Optional<VarianteEntity> findBySku(String sku);
+    Optional<VarianteEntity> findByDisenoIdAndMedidaId(Long disenoId, Long medidaId);
     List<VarianteEntity> findByActivoTrue();
     List<VarianteEntity> findByDisenoIdOrderByIdAsc(Long disenoId);
     List<VarianteEntity> findByDisenoIdAndActivoTrueOrderByIdAsc(Long disenoId);

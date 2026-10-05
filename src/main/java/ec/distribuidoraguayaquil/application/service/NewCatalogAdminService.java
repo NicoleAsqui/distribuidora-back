@@ -421,24 +421,33 @@ public class NewCatalogAdminService {
     }
 
     public ProductoAdminDto createProducto(ProductoAdminDto body) {
-        VarianteEntity v = new VarianteEntity();
-        applyVarianteFromProducto(v, body, true);
-        v = varianteRepository.save(v);
-        syncProductoChildren(v.getId(), body);
-        return toProductoDto(v);
+        try {
+            VarianteEntity v = new VarianteEntity();
+            applyVarianteFromProducto(v, body, true);
+            v = varianteRepository.saveAndFlush(v);
+            syncProductoChildren(v.getId(), body);
+            return toProductoDto(v);
+        } catch (DataIntegrityViolationException e) {
+            throw productoConflict(e);
+        }
     }
 
     public ProductoAdminDto updateProducto(Long id, ProductoAdminDto body) {
-        VarianteEntity v = find(varianteRepository, id, "Producto");
-        applyVarianteFromProducto(v, body, false);
-        v = varianteRepository.save(v);
-        syncProductoChildren(v.getId(), body);
-        return toProductoDto(v);
+        try {
+            VarianteEntity v = find(varianteRepository, id, "Producto");
+            applyVarianteFromProducto(v, body, false);
+            v = varianteRepository.saveAndFlush(v);
+            syncProductoChildren(v.getId(), body);
+            return toProductoDto(v);
+        } catch (DataIntegrityViolationException e) {
+            throw productoConflict(e);
+        }
     }
 
     private void applyVarianteFromProducto(VarianteEntity e, ProductoAdminDto body, boolean creating) {
         requireFk(disenoRepository, body.disenoId(), "disenoId");
         Long medidaId = resolveMedidaId(body);
+        ensureUniqueDisenoMedida(body.disenoId(), medidaId, creating ? null : e.getId());
         e.setDisenoId(body.disenoId());
         e.setMedidaId(medidaId);
         if (creating) {
@@ -449,6 +458,42 @@ public class NewCatalogAdminService {
         }
         // En edición el SKU no se cambia (mantiene el histórico).
         e.setActivo(nvl(body.activo(), Boolean.TRUE));
+    }
+
+    /** Un diseño no puede tener dos productos con la misma medida. */
+    private void ensureUniqueDisenoMedida(Long disenoId, Long medidaId, Long excludeVarianteId) {
+        varianteRepository.findByDisenoIdAndMedidaId(disenoId, medidaId).ifPresent(other -> {
+            if (excludeVarianteId != null && excludeVarianteId.equals(other.getId())) {
+                return;
+            }
+            MedidaEntity m = medidaRepository.findById(medidaId).orElse(null);
+            String dims = m == null
+                    ? "esa medida"
+                    : m.getLargo() + "×" + m.getAncho() + "×" + m.getAlto() + " " + m.getUnidad();
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ya existe el producto " + other.getSku() + " con " + dims
+                            + " en este diseño. Usa otra medida o edita " + other.getSku() + ".");
+        });
+    }
+
+    private static ResponseStatusException productoConflict(DataIntegrityViolationException e) {
+        String raw = e.getMostSpecificCause() != null
+                ? String.valueOf(e.getMostSpecificCause().getMessage())
+                : String.valueOf(e.getMessage());
+        String lower = raw.toLowerCase(Locale.ROOT);
+        if (lower.contains("variantes_diseno_medida_unique") || lower.contains("(diseno_id, medida_id)")) {
+            return new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ya existe un producto con el mismo diseño y medida. Cambia largo×ancho×alto o edita el otro SKU.");
+        }
+        if (lower.contains("variantes_sku_key") || lower.contains("(sku)")) {
+            return new ResponseStatusException(HttpStatus.CONFLICT, "Ese SKU ya está en uso.");
+        }
+        log.warn("Conflicto al guardar producto: {}", raw);
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "No se pudo guardar el producto por un conflicto de datos (diseño+medida o SKU duplicado).");
     }
 
     /** Medida desde largo×ancho×alto (preferido) o medidaId legado. */
@@ -487,7 +532,10 @@ public class NewCatalogAdminService {
 
     private void syncProductoChildren(Long varianteId, ProductoAdminDto body) {
         syncPrecios(varianteId, body.precios() == null ? List.of() : body.precios());
-        // Fotos y texturas viven en el diseño; no sincronizar desde el admin de productos.
+        // Fotos propias del producto (variante). Texturas del modelo siguen en Diseños.
+        if (body.imagenes() != null) {
+            syncImagenes(varianteId, body.imagenes());
+        }
         syncComponentes(varianteId, body.componentes() == null ? List.of() : body.componentes());
         syncTags(varianteId, body.tagIds() == null ? List.of() : body.tagIds());
     }
@@ -581,7 +629,11 @@ public class NewCatalogAdminService {
         for (PrecioEntity p : precioRepository.findByVarianteIdOrderByCantidadDesdeAsc(id)) {
             precios.add(new ProductoAdminDto.PrecioLine(p.getId(), p.getCantidadDesde(), p.getPrecio()));
         }
-        List<ProductoAdminDto.ImagenLine> imagenes = List.of();
+        List<ProductoAdminDto.ImagenLine> imagenes = new ArrayList<>();
+        for (VarianteImagenEntity img : varianteImagenRepository.findByVarianteIdOrderByPrincipalDescOrdenAscIdAsc(id)) {
+            imagenes.add(new ProductoAdminDto.ImagenLine(
+                    img.getId(), img.getUrl(), img.getUrlThumb(), img.getPrincipal(), img.getOrden()));
+        }
         List<ProductoAdminDto.ComponenteLine> componentes = new ArrayList<>();
         for (VarianteComponenteEntity c : varianteComponenteRepository.findByVarianteIdOrderByIdAsc(id)) {
             componentes.add(new ProductoAdminDto.ComponenteLine(
