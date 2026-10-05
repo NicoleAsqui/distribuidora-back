@@ -30,6 +30,14 @@ public class IdeaVarianteEntity {
     @Column(columnDefinition = "TEXT")
     private String descripcion;
 
+    /** Foto full de esta idea individual (lo que ve el cliente). */
+    @Column(columnDefinition = "TEXT")
+    private String url;
+
+    /** Miniatura de la foto de la idea individual. */
+    @Column(name = "url_thumb", columnDefinition = "TEXT")
+    private String urlThumb;
+
     @Column(nullable = false)
     private Integer orden = 0;
 }

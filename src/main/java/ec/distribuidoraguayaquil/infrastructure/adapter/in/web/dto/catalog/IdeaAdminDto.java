@@ -29,6 +29,8 @@ public record IdeaAdminDto(
             Long varianteId,
             String titulo,
             String descripcion,
+            String url,
+            String urlThumb,
             Integer orden
     ) {
     }

@@ -622,8 +622,22 @@ public class CatalogQueryService {
             variantesPorIdea = new HashMap<>();
             for (Map.Entry<Long, List<IdeaVarianteEntity>> e : porIdea.entrySet()) {
                 variantesPorIdea.put(e.getKey(), e.getValue().stream()
-                        .map(iv -> new IdeaDto.IdeaVarianteDto(iv.getId(), iv.getVarianteId(),
-                                skus.get(iv.getVarianteId()), iv.getTitulo(), iv.getDescripcion(), iv.getOrden()))
+                        .map(iv -> {
+                            String full = blankToNull(iv.getUrl());
+                            String thumb = blankToNull(iv.getUrlThumb());
+                            if (thumb == null) {
+                                thumb = full;
+                            }
+                            return new IdeaDto.IdeaVarianteDto(
+                                    iv.getId(),
+                                    iv.getVarianteId(),
+                                    skus.get(iv.getVarianteId()),
+                                    iv.getTitulo(),
+                                    iv.getDescripcion(),
+                                    full,
+                                    thumb,
+                                    iv.getOrden());
+                        })
                         .toList());
             }
         }

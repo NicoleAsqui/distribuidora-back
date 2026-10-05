@@ -1384,8 +1384,12 @@ public class NewCatalogAdminService {
             IdeaVarianteEntity e = new IdeaVarianteEntity();
             e.setIdeaId(ideaId);
             e.setVarianteId(line.varianteId());
-            e.setTitulo(line.titulo());
-            e.setDescripcion(line.descripcion());
+            e.setTitulo(blank(line.titulo()) ? null : line.titulo().trim());
+            e.setDescripcion(blank(line.descripcion()) ? null : line.descripcion().trim());
+            String url = blank(line.url()) ? null : line.url().trim();
+            String thumb = blank(line.urlThumb()) ? null : line.urlThumb().trim();
+            e.setUrl(url);
+            e.setUrlThumb(thumb == null ? url : thumb);
             e.setOrden(nvl(line.orden(), i));
             ideaVarianteRepository.save(e);
             i++;
@@ -1402,7 +1406,13 @@ public class NewCatalogAdminService {
         List<IdeaAdminDto.ProductoLine> productos = new ArrayList<>();
         for (IdeaVarianteEntity iv : ideaVarianteRepository.findByIdeaIdOrderByOrdenAscIdAsc(id)) {
             productos.add(new IdeaAdminDto.ProductoLine(
-                    iv.getId(), iv.getVarianteId(), iv.getTitulo(), iv.getDescripcion(), iv.getOrden()));
+                    iv.getId(),
+                    iv.getVarianteId(),
+                    iv.getTitulo(),
+                    iv.getDescripcion(),
+                    iv.getUrl(),
+                    iv.getUrlThumb(),
+                    iv.getOrden()));
         }
         return new IdeaAdminDto(
                 id,
@@ -1486,6 +1496,10 @@ public class NewCatalogAdminService {
         e.setVarianteId(body.getVarianteId());
         e.setTitulo(body.getTitulo());
         e.setDescripcion(body.getDescripcion());
+        String url = blank(body.getUrl()) ? null : body.getUrl().trim();
+        String thumb = blank(body.getUrlThumb()) ? null : body.getUrlThumb().trim();
+        e.setUrl(url);
+        e.setUrlThumb(thumb == null ? url : thumb);
         e.setOrden(nvl(body.getOrden(), 0));
     }
 

@@ -19,6 +19,8 @@ public record IdeaDto(
             String sku,
             String titulo,
             String descripcion,
+            String imagen,
+            String imagenThumb,
             Integer orden
     ) {
     }
