@@ -11,4 +11,5 @@ public interface DisenoRepository extends JpaRepository<DisenoEntity, Long> {
     List<DisenoEntity> findByActivoTrueOrderByNombreAscIdAsc();
     Optional<DisenoEntity> findBySlug(String slug);
     Optional<DisenoEntity> findByNombre(String nombre);
+    Optional<DisenoEntity> findBySeccionAndNombre(String seccion, String nombre);
 }

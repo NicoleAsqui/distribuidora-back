@@ -284,17 +284,59 @@ public class NewCatalogAdminService {
     }
 
     private void applyDiseno(DisenoEntity e, DisenoEntity body) {
-        e.setNombre(required(body.getNombre(), "nombre"));
-        e.setSlug(blank(body.getSlug()) ? slugify(e.getNombre()) : body.getSlug().trim());
+        String nombre = required(body.getNombre(), "nombre").trim();
+        String seccion = normalizeDisenoSeccion(body.getSeccion());
+        String slug = blank(body.getSlug()) ? slugify(nombre) : slugify(body.getSlug().trim());
+
+        disenoRepository.findBySeccionAndNombre(seccion, nombre).ifPresent(other -> {
+            if (e.getId() == null || !other.getId().equals(e.getId())) {
+                throw badRequest(
+                        "Ya existe el diseño «" + nombre + "» en la sección " + seccion
+                                + ". El mismo nombre sí se puede usar en otro material/sección.");
+            }
+        });
+
+        // Slug único global (URLs). Si choca con otro diseño, sufijar con la sección.
+        slug = ensureUniqueDisenoSlug(slug, seccion, e.getId());
+
+        e.setNombre(nombre);
+        e.setSlug(slug);
         e.setDescripcion(body.getDescripcion());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
-        e.setSeccion(normalizeDisenoSeccion(body.getSeccion()));
+        e.setSeccion(seccion);
         e.setMotor(normalizeDisenoMotor(body.getMotor(), e.getSeccion()));
         e.setVideoUrl(blank(body.getVideoUrl()) ? null : body.getVideoUrl().trim());
         if (body.getImagenUrl() != null || body.getImagenThumbUrl() != null) {
             e.setImagenUrl(blank(body.getImagenUrl()) ? null : body.getImagenUrl().trim());
             e.setImagenThumbUrl(blank(body.getImagenThumbUrl()) ? null : body.getImagenThumbUrl().trim());
         }
+    }
+
+    /** Si el slug ya lo usa otro diseño, prueba {@code slug-seccion} y variantes. */
+    private String ensureUniqueDisenoSlug(String baseSlug, String seccion, Long selfId) {
+        String candidate = blank(baseSlug) ? "diseno" : baseSlug;
+        if (disenoSlugFree(candidate, selfId)) {
+            return candidate;
+        }
+        String withSeccion = slugify(candidate + "-" + seccion);
+        if (disenoSlugFree(withSeccion, selfId)) {
+            return withSeccion;
+        }
+        for (int i = 2; i <= 50; i++) {
+            String numbered = withSeccion + "-" + i;
+            if (disenoSlugFree(numbered, selfId)) {
+                return numbered;
+            }
+        }
+        throw badRequest(
+                "El slug «" + candidate + "» ya está en uso. Elige otro slug (ej. "
+                        + withSeccion + ").");
+    }
+
+    private boolean disenoSlugFree(String slug, Long selfId) {
+        return disenoRepository.findBySlug(slug)
+                .map(other -> selfId != null && other.getId().equals(selfId))
+                .orElse(true);
     }
 
     /** acetato | cartulina | mdf | carton | tarjetas | varios */

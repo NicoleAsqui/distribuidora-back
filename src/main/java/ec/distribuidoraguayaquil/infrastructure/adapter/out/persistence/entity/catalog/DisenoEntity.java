@@ -6,22 +6,30 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "disenos")
+@Table(
+        name = "disenos",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "disenos_seccion_nombre_uidx", columnNames = {"seccion", "nombre"})
+        }
+)
 public class DisenoEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    /** Único por sección (material): puede repetirse en cartulina vs mdf. */
+    @Column(nullable = false)
     private String nombre;
 
+    /** Único global (URLs del catálogo público). */
     @Column(nullable = false, unique = true)
     private String slug;
 
