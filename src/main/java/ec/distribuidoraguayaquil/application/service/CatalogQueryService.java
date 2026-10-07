@@ -675,21 +675,22 @@ public class CatalogQueryService {
         }).toList();
     }
 
-    /** "30×20×10" a partir de la medida; cadena vacía si no hay medida. */
+    /** "30×20×10" a partir de la medida. Sin alto (Varios) queda "30×20". */
     public static String dims(MedidaEntity medida) {
         if (medida == null) {
             return "";
         }
         List<String> partes = new ArrayList<>(3);
-        for (BigDecimal valor : List.of(
-                nvl(medida.getLargo()), nvl(medida.getAncho()), nvl(medida.getAlto()))) {
-            partes.add(valor.stripTrailingZeros().toPlainString());
+        if (medida.getLargo() != null) {
+            partes.add(medida.getLargo().stripTrailingZeros().toPlainString());
+        }
+        if (medida.getAncho() != null) {
+            partes.add(medida.getAncho().stripTrailingZeros().toPlainString());
+        }
+        if (medida.getAlto() != null) {
+            partes.add(medida.getAlto().stripTrailingZeros().toPlainString());
         }
         return String.join("×", partes);
-    }
-
-    private static BigDecimal nvl(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
     }
 
     private static String nullToEmpty(String value) {

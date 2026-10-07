@@ -27,7 +27,8 @@ public class MedidaEntity {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal ancho;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    /** Opcional en la sección Varios (el producto puede no tener altura). */
+    @Column(precision = 10, scale = 2)
     private BigDecimal alto;
 
     @Column(nullable = false)

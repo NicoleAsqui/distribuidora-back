@@ -29,7 +29,7 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
             SELECT v FROM VarianteEntity v, MedidaEntity m
             WHERE v.disenoId = :disenoId
               AND v.medidaId = m.id
-              AND m.alto = :alto
+              AND m.alto IS NOT DISTINCT FROM :alto
               AND LOWER(m.unidad) = LOWER(:unidad)
               AND (
                 (m.largo = :largo AND m.ancho = :ancho)

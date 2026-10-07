@@ -23,7 +23,7 @@ public interface MedidaRepository extends JpaRepository<MedidaEntity, Long> {
      */
     @Query("""
             SELECT m FROM MedidaEntity m
-            WHERE m.alto = :alto
+            WHERE m.alto IS NOT DISTINCT FROM :alto
               AND LOWER(m.unidad) = LOWER(:unidad)
               AND (
                 (m.largo = :ladoA AND m.ancho = :ladoB)
