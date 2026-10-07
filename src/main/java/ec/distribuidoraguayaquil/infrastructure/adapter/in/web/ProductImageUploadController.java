@@ -1,6 +1,10 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.ProductImageUploadService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,6 +30,24 @@ public class ProductImageUploadController {
     @PostMapping("/product-images")
     public Map<String, String> uploadProductImage(@RequestParam("image") MultipartFile image) {
         return uploadService.upload(image);
+    }
+
+    /**
+     * Proxy de imágenes del bucket GCS (admin) para embeber fotos en PDF sin CORS del navegador.
+     */
+    @GetMapping("/image-proxy")
+    public ResponseEntity<byte[]> imageProxy(@RequestParam("url") String url) {
+        ProductImageUploadService.ProxiedImage img = uploadService.fetchAllowedImage(url);
+        MediaType mediaType;
+        try {
+            mediaType = MediaType.parseMediaType(img.contentType());
+        } catch (Exception e) {
+            mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        }
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=3600")
+                .body(img.bytes());
     }
 
     /**

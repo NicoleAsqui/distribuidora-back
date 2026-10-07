@@ -7,6 +7,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +31,12 @@ public class ResendEmailService {
     }
 
     public void sendHtml(String to, String subject, String html) {
+        sendHtml(to, subject, html, List.of());
+    }
+
+    public record Attachment(String filename, String contentBase64) {}
+
+    public void sendHtml(String to, String subject, String html, List<Attachment> attachments) {
         if (!mailProperties.isConfigured()) {
             log.warn("Resend no configurado (RESEND_API_KEY vacío); no se envió correo a {}", to);
             return;
@@ -38,12 +46,27 @@ public class ResendEmailService {
             return;
         }
 
-        Map<String, Object> body = Map.of(
-                "from", mailProperties.fromHeader(),
-                "to", List.of(to.trim()),
-                "subject", subject,
-                "html", html
-        );
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("from", mailProperties.fromHeader());
+        body.put("to", List.of(to.trim()));
+        body.put("subject", subject);
+        body.put("html", html);
+        if (attachments != null && !attachments.isEmpty()) {
+            List<Map<String, String>> atts = new ArrayList<>();
+            for (Attachment a : attachments) {
+                if (a == null || a.filename() == null || a.filename().isBlank()
+                        || a.contentBase64() == null || a.contentBase64().isBlank()) {
+                    continue;
+                }
+                atts.add(Map.of(
+                        "filename", a.filename().trim(),
+                        "content", a.contentBase64().replaceAll("\\s", "")
+                ));
+            }
+            if (!atts.isEmpty()) {
+                body.put("attachments", atts);
+            }
+        }
 
         try {
             restClient.post()

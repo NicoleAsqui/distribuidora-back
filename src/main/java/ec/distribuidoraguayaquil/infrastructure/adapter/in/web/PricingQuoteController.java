@@ -152,6 +152,31 @@ public class PricingQuoteController {
         repository.deleteById(id);
     }
 
+    /** Envía la cotización simple al email del cliente (PDF en base64). */
+    @PostMapping("/{id}/email-client")
+    public Map<String, Object> emailClient(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        PricingQuoteEntity e = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        String pdfBase64 = asString(body.get("pdfBase64"));
+        String filename = asString(body.get("filename"));
+        try {
+            quoteAdminMailService.sendManualQuoteToClient(e, pdfBase64, filename);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+        } catch (IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "No se pudo enviar el correo");
+        }
+        return Map.of(
+                "ok", true,
+                "to", e.getClientEmail() == null ? "" : e.getClientEmail(),
+                "code", e.getCode()
+        );
+    }
+
     private PricingQuoteEntity fromBody(Map<String, Object> body, boolean isNew) {
         PricingQuoteEntity e = new PricingQuoteEntity();
         String id = body.get("id") == null || String.valueOf(body.get("id")).isBlank()

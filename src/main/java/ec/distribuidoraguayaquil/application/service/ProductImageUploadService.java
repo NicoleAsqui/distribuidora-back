@@ -13,6 +13,11 @@ import javax.imageio.ImageIO;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Map;
@@ -169,6 +174,65 @@ public class ProductImageUploadService {
             return "video/mp4";
         }
         return null;
+    }
+
+    /**
+     * Descarga una imagen pública de nuestro bucket GCS (para embeber en PDF sin CORS).
+     */
+    public record ProxiedImage(byte[] bytes, String contentType) {}
+
+    public ProxiedImage fetchAllowedImage(String url) {
+        if (url == null || url.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "url requerida");
+        }
+        URI uri;
+        try {
+            uri = URI.create(url.trim());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "url inválida");
+        }
+        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
+        if (!"storage.googleapis.com".equals(host) && !"storage.cloud.google.com".equals(host)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Host no permitido");
+        }
+        String bucket = gcsProperties.getBucketName();
+        if (bucket == null || bucket.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "GCS no configurado");
+        }
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        String prefix = "/" + bucket + "/";
+        if (!path.startsWith(prefix)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bucket no permitido");
+        }
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+            HttpRequest req = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofSeconds(20))
+                    .GET()
+                    .header("Accept", "image/*,*/*")
+                    .build();
+            HttpResponse<byte[]> res = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            if (res.statusCode() < 200 || res.statusCode() >= 300) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "No se pudo obtener la imagen");
+            }
+            byte[] bytes = res.body();
+            if (bytes == null || bytes.length == 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Imagen vacía");
+            }
+            if (bytes.length > 8 * 1024 * 1024) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Imagen demasiado grande");
+            }
+            String ct = res.headers().firstValue("content-type").orElse("application/octet-stream");
+            return new ProxiedImage(bytes, ct.split(";")[0].trim());
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "No se pudo obtener la imagen: " + e.getMessage(), e);
+        }
     }
 
     /**
