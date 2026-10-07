@@ -7,7 +7,7 @@ public record DisenoCardDto(
         String slug,
         String descripcion,
         Integer orden,
-        /** Familia del diseño: acetato | cartulina | mdf | carton | varios */
+        /** Familia del diseño: acetato | cartulina | mdf | carton | tarjetas | varios */
         String seccion,
         /** Motor de precios (quote-engine). */
         String motor,

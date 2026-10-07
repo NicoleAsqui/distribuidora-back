@@ -180,14 +180,14 @@ public class CatalogQueryService {
         return cards;
     }
 
-    /** acetato | cartulina | mdf | carton | varios — default cartulina. */
+    /** acetato | cartulina | mdf | carton | tarjetas | varios — default cartulina. */
     static String normalizeProductoSeccion(String raw) {
         if (raw == null || raw.isBlank()) {
             return "cartulina";
         }
         String s = raw.trim().toLowerCase();
         return switch (s) {
-            case "acetato", "cartulina", "mdf", "carton", "varios" -> s;
+            case "acetato", "cartulina", "mdf", "carton", "tarjetas", "varios" -> s;
             default -> "cartulina";
         };
     }
@@ -205,7 +205,8 @@ public class CatalogQueryService {
             case "acetato" -> 1;
             case "mdf" -> 2;
             case "carton" -> 3;
-            case "varios" -> 4;
+            case "tarjetas" -> 4;
+            case "varios" -> 5;
             default -> 9;
         };
     }

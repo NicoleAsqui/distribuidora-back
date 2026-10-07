@@ -297,13 +297,14 @@ public class NewCatalogAdminService {
         }
     }
 
-    /** acetato | cartulina | mdf | carton | varios */
+    /** acetato | cartulina | mdf | carton | tarjetas | varios */
     private static String normalizeDisenoSeccion(String raw) {
         String s = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
         return switch (s) {
-            case "acetato", "cartulina", "mdf", "carton", "varios" -> s;
+            case "acetato", "cartulina", "mdf", "carton", "tarjetas", "varios" -> s;
             case "" -> "cartulina";
-            default -> throw badRequest("Sección inválida. Usa: acetato, cartulina, mdf, carton o varios");
+            default -> throw badRequest(
+                    "Sección inválida. Usa: acetato, cartulina, mdf, carton, tarjetas o varios");
         };
     }
 
@@ -559,7 +560,7 @@ public class NewCatalogAdminService {
                 "No se pudo guardar el producto por un conflicto de datos (diseño+medida o SKU duplicado).");
     }
 
-    /** Medida desde largo×ancho×alto (preferido) o medidaId legado. Alto es opcional en Varios. */
+    /** Medida desde largo×ancho×alto (preferido) o medidaId legado. Alto opcional en Varios / Tarjetas. */
     private Long resolveMedidaId(ProductoAdminDto body) {
         boolean altoOpcional = altoOpcional(body.disenoId());
         if (body.largo() != null && body.ancho() != null) {
@@ -573,18 +574,21 @@ public class NewCatalogAdminService {
             return body.medidaId();
         }
         if (altoOpcional) {
-            throw badRequest("Indica largo y ancho (cm). El alto es opcional en Varios.");
+            throw badRequest("Indica largo y ancho (cm). El alto es opcional en esta sección.");
         }
         throw badRequest("Indica largo, ancho y alto de la caja (cm)");
     }
 
-    /** Solo la sección Varios puede guardar una medida sin alto. */
+    /** Varios y Tarjetas/etiquetas pueden guardar medida sin alto. */
     private boolean altoOpcional(Long disenoId) {
         if (disenoId == null) {
             return false;
         }
         return disenoRepository.findById(disenoId)
-                .map(d -> "varios".equalsIgnoreCase(d.getSeccion() == null ? "" : d.getSeccion().trim()))
+                .map(d -> {
+                    String sec = d.getSeccion() == null ? "" : d.getSeccion().trim().toLowerCase(Locale.ROOT);
+                    return "varios".equals(sec) || "tarjetas".equals(sec);
+                })
                 .orElse(false);
     }
 
