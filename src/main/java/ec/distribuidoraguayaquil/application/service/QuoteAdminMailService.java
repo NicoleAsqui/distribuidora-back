@@ -71,18 +71,29 @@ public class QuoteAdminMailService {
                     BigDecimal alto = decimal(item.path("altoBase"));
                     JsonNode pricing = item.path("pricing");
                     BigDecimal unit = decimal(pricing.path("precioUnidad"));
+                    if (unit.signum() == 0) {
+                        unit = decimal(item.path("precioUnitario"));
+                    }
                     BigDecimal line = decimal(pricing.path("lineTotal"));
+                    if (line.signum() == 0) {
+                        line = decimal(item.path("lineTotal"));
+                    }
                     String notes = text(item, "notes");
+                    boolean manual = !item.has("pricing") && item.has("precioUnitario");
 
                     itemsHtml.append("<tr>")
                             .append("<td style='padding:10px;border:1px solid #e2e8f0;'>").append(i++).append("</td>")
                             .append("<td style='padding:10px;border:1px solid #e2e8f0;'>")
                             .append(esc(label.isBlank() ? material : label)).append("<br/>")
-                            .append("<span style='color:#64748b;font-size:12px;'>")
-                            .append(esc(material)).append(" · ")
-                            .append(fmt(largo)).append("×").append(fmt(ancho)).append("×").append(fmt(alto))
-                            .append(" cm · qty ").append(qty)
-                            .append("</span>");
+                            .append("<span style='color:#64748b;font-size:12px;'>");
+                    if (manual) {
+                        itemsHtml.append("qty ").append(qty);
+                    } else {
+                        itemsHtml.append(esc(material)).append(" · ")
+                                .append(fmt(largo)).append("×").append(fmt(ancho)).append("×").append(fmt(alto))
+                                .append(" cm · qty ").append(qty);
+                    }
+                    itemsHtml.append("</span>");
                     if (!notes.isBlank()) {
                         itemsHtml.append("<br/><span style='color:#64748b;font-size:12px;'>Notas: ")
                                 .append(esc(notes)).append("</span>");

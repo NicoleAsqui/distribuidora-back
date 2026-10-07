@@ -80,6 +80,10 @@ public class PricingQuoteController {
         body.putIfAbsent("deliveryDate", existing.getDeliveryDate());
         body.putIfAbsent("status", existing.getStatus());
         body.putIfAbsent("notes", existing.getNotes());
+        body.putIfAbsent("kind", existing.getKind());
+        body.putIfAbsent("requiresInvoice", existing.getRequiresInvoice());
+        body.putIfAbsent("subtotal", existing.getSubtotal());
+        body.putIfAbsent("iva", existing.getIva());
         PricingQuoteEntity e = fromBody(body, false);
         e.setEditToken(ensureEditToken(existing));
         return toMap(repository.save(e));
@@ -170,8 +174,21 @@ public class PricingQuoteController {
         e.setDeliveryDate(asString(body.get("deliveryDate")));
         e.setStatus(String.valueOf(body.getOrDefault("status", "sent")));
         e.setNotes(asString(body.get("notes")));
+        String kind = asString(body.get("kind"));
+        if (kind.isBlank()) {
+            kind = "motor";
+        }
+        e.setKind(kind.trim().toLowerCase());
+        e.setRequiresInvoice(asBoolean(body.get("requiresInvoice")));
+        Object subtotal = body.get("subtotal");
+        Object iva = body.get("iva");
         Object total = body.get("total");
+        e.setSubtotal(subtotal == null ? null : new BigDecimal(String.valueOf(subtotal)));
+        e.setIva(iva == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(iva)));
         e.setTotal(total == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(total)));
+        if (e.getSubtotal() == null) {
+            e.setSubtotal(e.getTotal());
+        }
         try {
             Object items = body.get("items");
             e.setItemsJson(objectMapper.writeValueAsString(items == null ? List.of() : items));
@@ -193,7 +210,14 @@ public class PricingQuoteController {
         map.put("deliveryDate", e.getDeliveryDate());
         map.put("status", e.getStatus());
         map.put("notes", e.getNotes());
-        map.put("total", e.getTotal() == null ? BigDecimal.ZERO : e.getTotal());
+        map.put("kind", e.getKind() == null || e.getKind().isBlank() ? "motor" : e.getKind());
+        map.put("requiresInvoice", Boolean.TRUE.equals(e.getRequiresInvoice()));
+        BigDecimal total = e.getTotal() == null ? BigDecimal.ZERO : e.getTotal();
+        BigDecimal subtotal = e.getSubtotal() == null ? total : e.getSubtotal();
+        BigDecimal iva = e.getIva() == null ? BigDecimal.ZERO : e.getIva();
+        map.put("subtotal", subtotal);
+        map.put("iva", iva);
+        map.put("total", total);
         String json = e.getItemsJson();
         if (json == null || json.isBlank()) {
             map.put("items", List.of());
@@ -207,6 +231,17 @@ public class PricingQuoteController {
             map.put("itemsParseError", true);
         }
         return map;
+    }
+
+    private static boolean asBoolean(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        return "true".equalsIgnoreCase(String.valueOf(value).trim())
+                || "1".equals(String.valueOf(value).trim());
     }
 
     private static String asString(Object value) {
@@ -226,6 +261,10 @@ public class PricingQuoteController {
         map.put("deliveryDate", full.get("deliveryDate"));
         map.put("status", full.get("status"));
         map.put("notes", full.get("notes"));
+        map.put("kind", full.get("kind"));
+        map.put("requiresInvoice", full.get("requiresInvoice"));
+        map.put("subtotal", full.get("subtotal"));
+        map.put("iva", full.get("iva"));
         Object itemsObj = full.get("items");
         if (itemsObj instanceof List<?> list) {
             map.put("items", list.stream().map(it -> {

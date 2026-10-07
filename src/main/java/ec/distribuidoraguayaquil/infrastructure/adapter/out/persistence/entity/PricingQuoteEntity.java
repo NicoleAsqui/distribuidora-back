@@ -51,6 +51,21 @@ public class PricingQuoteEntity {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal total;
 
+    /**
+     * motor = cotización con motor Excel; manual = producto/precio/cantidad a mano.
+     */
+    @Column(nullable = false, length = 16)
+    private String kind = "motor";
+
+    @Column(name = "requires_invoice", nullable = false)
+    private Boolean requiresInvoice = Boolean.FALSE;
+
+    @Column(precision = 14, scale = 2)
+    private BigDecimal subtotal;
+
+    @Column(precision = 14, scale = 2)
+    private BigDecimal iva;
+
     /** Enlace seguro para editar precios desde el correo al admin. */
     @Column(name = "edit_token")
     private String editToken;
@@ -79,6 +94,14 @@ public class PricingQuoteEntity {
     public void setNotes(String notes) { this.notes = notes; }
     public BigDecimal getTotal() { return total; }
     public void setTotal(BigDecimal total) { this.total = total; }
+    public String getKind() { return kind; }
+    public void setKind(String kind) { this.kind = kind; }
+    public Boolean getRequiresInvoice() { return requiresInvoice; }
+    public void setRequiresInvoice(Boolean requiresInvoice) { this.requiresInvoice = requiresInvoice; }
+    public BigDecimal getSubtotal() { return subtotal; }
+    public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
+    public BigDecimal getIva() { return iva; }
+    public void setIva(BigDecimal iva) { this.iva = iva; }
     public String getEditToken() { return editToken; }
     public void setEditToken(String editToken) { this.editToken = editToken; }
 }

@@ -622,13 +622,13 @@ public class CatalogQueryService {
 
         Map<Long, List<IdeaDto.IdeaVarianteDto>> variantesPorIdea = Map.of();
         if (includeVariantes) {
-            List<IdeaVarianteEntity> enlaces = ideaVarianteRepository.findByIdeaIdInOrderByOrdenAscIdAsc(ideaIds);
-            Map<Long, List<IdeaVarianteEntity>> porIdea = groupBy(enlaces, IdeaVarianteEntity::getIdeaId);
-            Map<Long, String> skus = new HashMap<>();
-            List<Long> varianteIds = enlaces.stream().map(IdeaVarianteEntity::getVarianteId).distinct().toList();
-            if (!varianteIds.isEmpty()) {
-                varianteRepository.findAllById(varianteIds)
-                        .forEach(v -> skus.put(v.getId(), v.getSku()));
+        List<IdeaVarianteEntity> enlaces = ideaVarianteRepository.findByIdeaIdInOrderByOrdenAscIdAsc(ideaIds);
+        Map<Long, List<IdeaVarianteEntity>> porIdea = groupBy(enlaces, IdeaVarianteEntity::getIdeaId);
+        Map<Long, String> skus = new HashMap<>();
+        List<Long> varianteIds = enlaces.stream().map(IdeaVarianteEntity::getVarianteId).distinct().toList();
+        if (!varianteIds.isEmpty()) {
+            varianteRepository.findAllById(varianteIds)
+                    .forEach(v -> skus.put(v.getId(), v.getSku()));
             }
             variantesPorIdea = new HashMap<>();
             for (Map.Entry<Long, List<IdeaVarianteEntity>> e : porIdea.entrySet()) {
