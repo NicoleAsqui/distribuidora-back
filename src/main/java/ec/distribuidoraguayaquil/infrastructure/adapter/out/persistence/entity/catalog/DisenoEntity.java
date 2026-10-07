@@ -35,7 +35,7 @@ public class DisenoEntity {
     private Integer orden = 0;
 
     /**
-     * Familia del catálogo: acetato | cartulina | mdf | carton.
+     * Familia del catálogo: acetato | cartulina | mdf | carton | varios.
      * Vive en el diseño; el producto solo la hereda al elegir el modelo.
      */
     @Column(nullable = false, length = 32)

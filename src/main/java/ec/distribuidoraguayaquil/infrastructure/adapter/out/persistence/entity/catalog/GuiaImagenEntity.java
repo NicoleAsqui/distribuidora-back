@@ -9,32 +9,24 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Color habilitado del diseño y, si se eligió, la foto de esa textura. */
 @Getter
 @Setter
 @Entity
-@Table(name = "diseno_texturas")
-public class DisenoTexturaEntity {
+@Table(name = "guia_imagenes")
+public class GuiaImagenEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "diseno_id", nullable = false)
-    private Long disenoId;
+    @Column(name = "guia_id", nullable = false)
+    private Long guiaId;
 
-    @Column(name = "textura_id", nullable = false)
-    private Long texturaId;
-
-    @Column(columnDefinition = "TEXT")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String url;
 
     @Column(name = "url_thumb", columnDefinition = "TEXT")
     private String urlThumb;
-
-    /** El cliente ve el círculo de este color. La foto de textura puede ir vacía. */
-    @Column(name = "color_activo", nullable = false)
-    private Boolean colorActivo = Boolean.TRUE;
 
     @Column(nullable = false)
     private Integer orden = 0;

@@ -1,6 +1,8 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
+import ec.distribuidoraguayaquil.application.service.GuiaService;
 import ec.distribuidoraguayaquil.application.service.NewCatalogAdminService;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.GuiaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.ProductoAdminDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.catalog.DisenoEntity;
@@ -40,6 +42,7 @@ import java.util.Map;
 public class NewCatalogAdminController {
 
     private final NewCatalogAdminService service;
+    private final GuiaService guiaService;
 
     // ------------------------------------------------------------------ diseños
 
@@ -354,5 +357,25 @@ public class NewCatalogAdminController {
     @DeleteMapping("/variante-tags/{varianteId}/{tagId}")
     public void deleteVarianteTag(@PathVariable Long varianteId, @PathVariable Long tagId) {
         service.deleteVarianteTag(varianteId, tagId);
+    }
+
+    @GetMapping("/guias")
+    public List<GuiaDto> listGuias(@RequestParam(required = false) String seccion) {
+        return guiaService.listAdmin(seccion);
+    }
+
+    @PostMapping("/guias")
+    public GuiaDto createGuia(@RequestBody GuiaDto body) {
+        return guiaService.create(body);
+    }
+
+    @PutMapping("/guias/{id}")
+    public GuiaDto updateGuia(@PathVariable Long id, @RequestBody GuiaDto body) {
+        return guiaService.update(id, body);
+    }
+
+    @DeleteMapping("/guias/{id}")
+    public void deleteGuia(@PathVariable Long id) {
+        guiaService.delete(id);
     }
 }

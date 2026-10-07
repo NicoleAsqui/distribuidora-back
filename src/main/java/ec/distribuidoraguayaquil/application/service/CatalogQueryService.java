@@ -180,14 +180,14 @@ public class CatalogQueryService {
         return cards;
     }
 
-    /** acetato | cartulina | mdf | carton — default cartulina. */
+    /** acetato | cartulina | mdf | carton | varios — default cartulina. */
     static String normalizeProductoSeccion(String raw) {
         if (raw == null || raw.isBlank()) {
             return "cartulina";
         }
         String s = raw.trim().toLowerCase();
         return switch (s) {
-            case "acetato", "cartulina", "mdf", "carton" -> s;
+            case "acetato", "cartulina", "mdf", "carton", "varios" -> s;
             default -> "cartulina";
         };
     }
@@ -205,6 +205,7 @@ public class CatalogQueryService {
             case "acetato" -> 1;
             case "mdf" -> 2;
             case "carton" -> 3;
+            case "varios" -> 4;
             default -> 9;
         };
     }
@@ -532,6 +533,9 @@ public class CatalogQueryService {
                     TexturaEntity::getId);
             List<ProductTexturaDto> out = new ArrayList<>();
             for (DisenoTexturaEntity link : links) {
+                if (Boolean.FALSE.equals(link.getColorActivo())) {
+                    continue;
+                }
                 TexturaEntity t = texturas.get(link.getTexturaId());
                 if (t == null) {
                     continue;
@@ -542,8 +546,14 @@ public class CatalogQueryService {
                     swatchThumb = swatch;
                 }
                 String image = link.getUrl();
+                if (image != null && image.isBlank()) {
+                    image = null;
+                }
                 String imageThumb = link.getUrlThumb();
-                if (imageThumb == null || imageThumb.isBlank()) {
+                if (imageThumb != null && imageThumb.isBlank()) {
+                    imageThumb = null;
+                }
+                if (imageThumb == null) {
                     imageThumb = image;
                 }
                 out.add(new ProductTexturaDto(

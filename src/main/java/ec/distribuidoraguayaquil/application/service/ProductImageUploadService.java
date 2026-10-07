@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import javax.imageio.ImageIO;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -26,9 +27,12 @@ public class ProductImageUploadService {
     private static final int THUMB_MAX = 520;
     private static final double FULL_QUALITY = 0.88;
     private static final double THUMB_QUALITY = 0.78;
-    private static final String OUTPUT_FORMAT = "jpg";
-    private static final String OUTPUT_EXT = ".jpg";
-    private static final String OUTPUT_MIME = "image/jpeg";
+    private static final String WEBP_FORMAT = "webp";
+    private static final String WEBP_EXT = ".webp";
+    private static final String WEBP_MIME = "image/webp";
+    private static final String JPEG_FORMAT = "jpg";
+    private static final String JPEG_EXT = ".jpg";
+    private static final String JPEG_MIME = "image/jpeg";
     private static final Set<String> ALLOWED = Set.of(
             "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/pjpeg", "image/x-png"
     );
@@ -39,6 +43,7 @@ public class ProductImageUploadService {
     public ProductImageUploadService(GcsProperties gcsProperties, Storage storage) {
         this.gcsProperties = gcsProperties;
         this.storage = storage;
+        ImageIO.scanForPlugins();
     }
 
     public Map<String, String> upload(MultipartFile file) {
@@ -66,8 +71,8 @@ public class ProductImageUploadService {
                                 + (file.getContentType() == null ? "sin tipo" : file.getContentType()) + ")");
             }
 
-            byte[] full = resize(original, FULL_MAX, FULL_QUALITY);
-            byte[] thumb = resize(original, THUMB_MAX, THUMB_QUALITY);
+            Encoded full = resize(original, FULL_MAX, FULL_QUALITY);
+            Encoded thumb = resize(original, THUMB_MAX, THUMB_QUALITY);
 
             String baseName = sanitizeBaseName(file.getOriginalFilename());
             LocalDate now = LocalDate.now();
@@ -76,11 +81,11 @@ public class ProductImageUploadService {
                 root = root + "/" + folderOverride.trim().replaceAll("^/+|/+$", "");
             }
             String prefix = root + "/" + now.getYear() + "/" + String.format("%02d", now.getMonthValue());
-            String objectPathFull = prefix + "/" + baseName + OUTPUT_EXT;
-            String objectPathThumb = prefix + "/" + baseName + "-thumb" + OUTPUT_EXT;
+            String objectPathFull = prefix + "/" + baseName + full.ext();
+            String objectPathThumb = prefix + "/" + baseName + "-thumb" + thumb.ext();
 
-            String image = putObject(objectPathFull, full, OUTPUT_MIME);
-            String imageThumb = putObject(objectPathThumb, thumb, OUTPUT_MIME);
+            String image = putObject(objectPathFull, full.bytes(), full.mime());
+            String imageThumb = putObject(objectPathThumb, thumb.bytes(), thumb.mime());
 
             return Map.of(
                     "image", image,
@@ -282,12 +287,26 @@ public class ProductImageUploadService {
         return gcsProperties.publicBase() + "/" + objectPath;
     }
 
-    private static byte[] resize(byte[] input, int maxSide, double quality) throws IOException {
+    private record Encoded(byte[] bytes, String ext, String mime) {}
+
+    /** Redimensiona y comprime a WebP. Si el encoder no está disponible, guarda JPEG. */
+    private static Encoded resize(byte[] input, int maxSide, double quality) throws IOException {
+        if (ImageIO.getImageWritersByFormatName(WEBP_FORMAT).hasNext()) {
+            try {
+                return new Encoded(encode(input, maxSide, quality, WEBP_FORMAT), WEBP_EXT, WEBP_MIME);
+            } catch (Exception ignored) {
+                /* seguir con JPEG */
+            }
+        }
+        return new Encoded(encode(input, maxSide, quality, JPEG_FORMAT), JPEG_EXT, JPEG_MIME);
+    }
+
+    private static byte[] encode(byte[] input, int maxSide, double quality, String format) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         Thumbnails.of(new ByteArrayInputStream(input))
                 .size(maxSide, maxSide)
                 .keepAspectRatio(true)
-                .outputFormat(OUTPUT_FORMAT)
+                .outputFormat(format)
                 .outputQuality(quality)
                 .toOutputStream(out);
         return out.toByteArray();

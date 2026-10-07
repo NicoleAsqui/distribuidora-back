@@ -241,7 +241,12 @@ public class NewCatalogAdminService {
         Set<Long> seen = new HashSet<>();
         int i = 0;
         for (ProductoAdminDto.TexturaLine line : safe) {
-            if (line == null || line.texturaId() == null || line.url() == null || line.url().isBlank()) {
+            if (line == null || line.texturaId() == null) {
+                continue;
+            }
+            boolean colorOn = !Boolean.FALSE.equals(line.colorActivo());
+            String url = line.url() == null ? "" : line.url().trim();
+            if (!colorOn && url.isBlank()) {
                 continue;
             }
             if (!seen.add(line.texturaId())) {
@@ -251,9 +256,15 @@ public class NewCatalogAdminService {
             DisenoTexturaEntity e = new DisenoTexturaEntity();
             e.setDisenoId(disenoId);
             e.setTexturaId(line.texturaId());
-            e.setUrl(line.url().trim());
-            String thumb = line.urlThumb();
-            e.setUrlThumb(thumb == null || thumb.isBlank() ? e.getUrl() : thumb.trim());
+            e.setColorActivo(colorOn);
+            if (url.isBlank()) {
+                e.setUrl(null);
+                e.setUrlThumb(null);
+            } else {
+                e.setUrl(url);
+                String thumb = line.urlThumb();
+                e.setUrlThumb(thumb == null || thumb.isBlank() ? url : thumb.trim());
+            }
             e.setOrden(nvl(line.orden(), i));
             try {
                 disenoTexturaRepository.save(e);
@@ -286,13 +297,13 @@ public class NewCatalogAdminService {
         }
     }
 
-    /** acetato | cartulina | mdf | carton */
+    /** acetato | cartulina | mdf | carton | varios */
     private static String normalizeDisenoSeccion(String raw) {
         String s = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
         return switch (s) {
-            case "acetato", "cartulina", "mdf", "carton" -> s;
+            case "acetato", "cartulina", "mdf", "carton", "varios" -> s;
             case "" -> "cartulina";
-            default -> throw badRequest("Sección inválida. Usa: acetato, cartulina, mdf o carton");
+            default -> throw badRequest("Sección inválida. Usa: acetato, cartulina, mdf, carton o varios");
         };
     }
 

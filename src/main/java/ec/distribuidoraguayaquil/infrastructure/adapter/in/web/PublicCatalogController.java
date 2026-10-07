@@ -1,6 +1,8 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.CatalogQueryService;
+import ec.distribuidoraguayaquil.application.service.GuiaService;
+import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.GuiaDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.CatalogCountsDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.DisenoCardDto;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog.IdeaDto;
@@ -26,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 public class PublicCatalogController {
 
     private final CatalogQueryService catalogQueryService;
+    private final GuiaService guiaService;
 
     /** Modelos (diseños) con foto representativa — galería por secciones. */
     @GetMapping("/disenos")
@@ -76,6 +79,12 @@ public class PublicCatalogController {
     @GetMapping("/viniles")
     public List<VinilEntity> viniles(@RequestParam(required = false) String tipo) {
         return catalogQueryService.listVinilesActivos(tipo);
+    }
+
+    /** Artículos de Información y Tutoriales. */
+    @GetMapping("/guias")
+    public List<GuiaDto> guias(@RequestParam String seccion) {
+        return guiaService.listPublic(seccion);
     }
 
     /** Nombres de diseño activos; el frontend los usa como filtro de categoría. */

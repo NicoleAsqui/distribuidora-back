@@ -54,7 +54,8 @@ public record ProductoAdminDto(
             Long texturaId,
             String url,
             String urlThumb,
-            Integer orden
+            Integer orden,
+            Boolean colorActivo
     ) {
     }
 }
