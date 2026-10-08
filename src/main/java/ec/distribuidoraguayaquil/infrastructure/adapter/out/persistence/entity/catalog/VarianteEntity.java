@@ -36,6 +36,10 @@ public class VarianteEntity {
     @Column(name = "unidades_contenido")
     private Integer unidadesContenido;
 
+    /** Si true, aparece en «Cajas más vendidas» (home / listado TOP). */
+    @Column(nullable = false)
+    private Boolean destacado = Boolean.FALSE;
+
     @Column(nullable = false)
     private Boolean activo = Boolean.TRUE;
 }

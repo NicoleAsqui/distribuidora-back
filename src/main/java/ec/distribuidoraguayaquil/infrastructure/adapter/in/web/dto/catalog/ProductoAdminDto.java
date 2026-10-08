@@ -21,6 +21,8 @@ public record ProductoAdminDto(
         String unidadVenta,
         /** Unidades por empaque; null si unidad_venta = unidad */
         Integer unidadesContenido,
+        /** Más vendida / TOP en el storefront */
+        Boolean destacado,
         Boolean activo,
         List<PrecioLine> precios,
         List<ImagenLine> imagenes,

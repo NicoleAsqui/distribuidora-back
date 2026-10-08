@@ -493,6 +493,7 @@ public class NewCatalogAdminService {
         }
         e.setSku(sku);
         applyUnidadVenta(e, body.getUnidadVenta(), body.getUnidadesContenido());
+        e.setDestacado(nvl(body.getDestacado(), Boolean.FALSE));
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
     }
 
@@ -563,6 +564,7 @@ public class NewCatalogAdminService {
         }
         // En edición el SKU no se cambia (mantiene el histórico).
         applyUnidadVenta(e, unidadVenta, body.unidadesContenido());
+        e.setDestacado(nvl(body.destacado(), Boolean.FALSE));
         e.setActivo(nvl(body.activo(), Boolean.TRUE));
     }
 
@@ -840,6 +842,7 @@ public class NewCatalogAdminService {
                 v.getSku(),
                 v.getUnidadVenta() == null ? "unidad" : v.getUnidadVenta(),
                 v.getUnidadesContenido(),
+                Boolean.TRUE.equals(v.getDestacado()),
                 v.getActivo(),
                 precios,
                 imagenes,

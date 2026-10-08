@@ -64,6 +64,7 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
             WHERE v.disenoId = d.id
               AND v.medidaId = m.id
               AND (:includeInactive = TRUE OR v.activo = TRUE)
+              AND (:onlyDestacado = FALSE OR v.destacado = TRUE)
               AND (:disenoId IS NULL OR v.disenoId = :disenoId)
               AND (
                 :qBlank = TRUE
@@ -85,6 +86,7 @@ public interface VarianteRepository extends JpaRepository<VarianteEntity, Long> 
             """)
     Page<VarianteEntity> pageByFilters(
             @Param("includeInactive") boolean includeInactive,
+            @Param("onlyDestacado") boolean onlyDestacado,
             @Param("disenoId") Long disenoId,
             @Param("q") String q,
             @Param("qBlank") boolean qBlank,

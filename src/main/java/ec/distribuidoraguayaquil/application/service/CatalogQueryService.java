@@ -69,7 +69,7 @@ public class CatalogQueryService {
 
     private static final Logger log = LoggerFactory.getLogger(CatalogQueryService.class);
 
-    /** Cuántas tarjetas devuelve {@code ?top=true}. */
+    /** Tamaño de página para {@code ?top=true} (solo productos con destacado=true). */
     private static final int TOP_LIMIT = 8;
 
     private final DisenoRepository disenoRepository;
@@ -312,7 +312,7 @@ public class CatalogQueryService {
     }
 
     /**
-     * @param onlyTop         limita a las primeras {@value #TOP_LIMIT} del catálogo
+     * @param onlyTop         solo productos marcados como más vendida (destacado)
      * @param designSlug      filtra por {@code disenos.slug} (opcional)
      * @param ideaSlug        filtra por variantes vinculadas a la idea (opcional)
      * @param includeInactive incluye variantes inactivas (uso admin)
@@ -365,9 +365,11 @@ public class CatalogQueryService {
             return pageFromIds(orderedMatched, safePage, safeSize);
         }
 
-        // Catálogo general: paginación en DB (no carga todas las variantes).
+        // Catálogo general / TOP: paginación en DB (no carga todas las variantes).
+        // onlyTop = solo productos con destacado=true (marcados en admin).
         Page<VarianteEntity> result = varianteRepository.pageByFilters(
                 includeInactive,
+                onlyTop,
                 disenoId,
                 term,
                 qBlank,
@@ -376,11 +378,8 @@ public class CatalogQueryService {
                 alto,
                 PageRequest.of(safePage, safeSize));
         if (onlyTop) {
-            List<VarianteEntity> content = result.getContent();
-            if (content.size() > TOP_LIMIT) {
-                content = content.subList(0, TOP_LIMIT);
-            }
-            return ProductPageDto.of(hydrateCards(content), 0, TOP_LIMIT, content.size());
+            return ProductPageDto.of(
+                    hydrateCards(result.getContent()), 0, safeSize, result.getTotalElements());
         }
         return ProductPageDto.of(hydrateCards(result.getContent()), safePage, safeSize, result.getTotalElements());
     }
@@ -602,7 +601,7 @@ public class CatalogQueryService {
                 diseno == null ? null : diseno.getId(),
                 diseno == null ? null : diseno.getSlug(),
                 diseno == null ? "" : nullToEmpty(diseno.getDescripcion()),
-                false,
+                Boolean.TRUE.equals(variante.getDestacado()),
                 Boolean.TRUE.equals(variante.getActivo()),
                 image,
                 imageThumb,
