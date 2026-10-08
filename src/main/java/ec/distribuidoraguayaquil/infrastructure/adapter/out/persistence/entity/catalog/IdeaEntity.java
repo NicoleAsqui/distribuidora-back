@@ -31,6 +31,10 @@ public class IdeaEntity {
     @Column(nullable = false)
     private Boolean activo = Boolean.TRUE;
 
+    /** Si true, aparece en «Cajas más vendidas» (home). */
+    @Column(nullable = false)
+    private Boolean destacado = Boolean.FALSE;
+
     @Column(nullable = false)
     private Integer orden = 0;
 }

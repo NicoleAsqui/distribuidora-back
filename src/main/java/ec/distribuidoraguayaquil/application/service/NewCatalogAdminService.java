@@ -1456,6 +1456,7 @@ public class NewCatalogAdminService {
         e.setSlug(blank(body.getSlug()) ? slugify(e.getNombre()) : body.getSlug().trim());
         e.setDescripcion(body.getDescripcion());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
+        e.setDestacado(nvl(body.getDestacado(), Boolean.FALSE));
         e.setOrden(nvl(body.getOrden(), 0));
     }
 
@@ -1488,6 +1489,7 @@ public class NewCatalogAdminService {
         e.setSlug(slug.isBlank() ? slugify(e.getNombre()) : slug);
         e.setDescripcion(body.descripcion());
         e.setActivo(nvl(body.activo(), Boolean.TRUE));
+        e.setDestacado(nvl(body.destacado(), Boolean.FALSE));
         e.setOrden(nvl(body.orden(), 0));
     }
 
@@ -1568,6 +1570,7 @@ public class NewCatalogAdminService {
                 idea.getSlug(),
                 idea.getDescripcion(),
                 idea.getActivo(),
+                Boolean.TRUE.equals(idea.getDestacado()),
                 idea.getOrden(),
                 imagenes,
                 productos

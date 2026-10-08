@@ -8,6 +8,7 @@ public record IdeaDto(
         String slug,
         String descripcion,
         Boolean activo,
+        Boolean destacado,
         Integer orden,
         String imagen,
         List<String> imagenes,

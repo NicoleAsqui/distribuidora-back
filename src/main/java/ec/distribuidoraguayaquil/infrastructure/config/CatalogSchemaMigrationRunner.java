@@ -44,6 +44,7 @@ public class CatalogSchemaMigrationRunner implements ApplicationRunner {
         runScript("018_diseno_nombre_por_seccion.sql");
         runScript("019_variante_unidad_venta.sql");
         runScript("020_variante_destacado.sql");
+        runScript("021_idea_destacado.sql");
     }
 
     private void runScript(String name) {

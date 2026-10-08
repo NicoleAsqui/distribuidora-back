@@ -12,6 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -44,12 +45,20 @@ public class OrderService implements OrderUseCase {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
     }
 
+    private static final BigDecimal PICKUP_DISCOUNT_RATE = new BigDecimal("0.03");
+
     @Override
     public Order create(Order order) {
         List<OrderItem> items = order.items() == null ? List.of() : order.items();
-        BigDecimal total = items.stream()
+        BigDecimal subtotal = items.stream()
                 .map(i -> i.price().multiply(BigDecimal.valueOf(i.qty())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal total = subtotal;
+        if (isPickupCheckout(order.checkoutJson()) && subtotal.signum() > 0) {
+            BigDecimal discount = subtotal.multiply(PICKUP_DISCOUNT_RATE).setScale(2, RoundingMode.HALF_UP);
+            total = subtotal.subtract(discount).setScale(2, RoundingMode.HALF_UP);
+        }
         long seq = repository.nextSequence();
         Order toSave = new Order(
                 UUID.randomUUID().toString(),
@@ -65,6 +74,19 @@ public class OrderService implements OrderUseCase {
                 Instant.now()
         );
         return repository.save(toSave);
+    }
+
+    private boolean isPickupCheckout(String checkoutJson) {
+        if (checkoutJson == null || checkoutJson.isBlank()) {
+            return false;
+        }
+        try {
+            var tree = objectMapper.readTree(checkoutJson);
+            var method = tree.get("fulfillmentMethod");
+            return method != null && "pickup".equalsIgnoreCase(method.asText(""));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override

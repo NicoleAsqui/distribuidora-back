@@ -11,6 +11,7 @@ public record IdeaAdminDto(
         String slug,
         String descripcion,
         Boolean activo,
+        Boolean destacado,
         Integer orden,
         List<ImagenLine> imagenes,
         List<ProductoLine> productos

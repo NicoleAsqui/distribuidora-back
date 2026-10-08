@@ -667,7 +667,9 @@ public class CatalogQueryService {
             }
             return new IdeaDto(
                     idea.getId(), idea.getNombre(), idea.getSlug(), idea.getDescripcion(),
-                    idea.getActivo(), idea.getOrden(),
+                    idea.getActivo(),
+                    Boolean.TRUE.equals(idea.getDestacado()),
+                    idea.getOrden(),
                     // Listados usan miniatura; detalle puede pedir full vía imagenes[0]
                     thumb,
                     imgs.stream().map(IdeaImagenEntity::getUrl).toList(),
