@@ -556,10 +556,15 @@ public class CatalogQueryService {
                 if (imageThumb == null) {
                     imageThumb = image;
                 }
+                String tipo = t.getTipo() == null || t.getTipo().isBlank() ? "textura" : t.getTipo().trim().toLowerCase();
+                if (!"color".equals(tipo)) {
+                    tipo = "textura";
+                }
                 out.add(new ProductTexturaDto(
                         t.getId(),
                         t.getNombre(),
                         t.getSlug(),
+                        tipo,
                         swatch,
                         swatchThumb,
                         image,

@@ -35,6 +35,13 @@ public class TexturaEntity {
     @Column(nullable = false, length = 32)
     private String seccion = "cartulina";
 
+    /**
+     * {@code textura} = acabado (blanca, kraft).
+     * {@code color} = color de catálogo (rojo, azul…).
+     */
+    @Column(nullable = false, length = 32)
+    private String tipo = "textura";
+
     @Column(nullable = false)
     private Boolean activo = Boolean.TRUE;
 

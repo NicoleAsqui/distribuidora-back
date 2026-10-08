@@ -1,10 +1,12 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.catalog;
 
-/** Color/textura del diseño con foto del modelo en ese color (detalle de producto). */
+/** Textura o color del diseño (detalle de producto). */
 public record ProductTexturaDto(
         Long texturaId,
         String nombre,
         String slug,
+        /** textura | color */
+        String tipo,
         String swatchUrl,
         String swatchThumbUrl,
         String image,

@@ -1099,6 +1099,12 @@ public class NewCatalogAdminService {
         e.setImagenThumbUrl(trimToNull(body.getImagenThumbUrl()));
         String sec = body.getSeccion() == null ? "" : body.getSeccion().trim().toLowerCase(Locale.ROOT);
         e.setSeccion(sec.isBlank() ? "cartulina" : sec);
+        String tipo = body.getTipo() == null ? "" : body.getTipo().trim().toLowerCase(Locale.ROOT);
+        if (!"color".equals(tipo) && !"textura".equals(tipo)) {
+            String slug = e.getSlug().toLowerCase(Locale.ROOT);
+            tipo = ("blanca".equals(slug) || "kraft".equals(slug)) ? "textura" : "color";
+        }
+        e.setTipo(tipo);
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
         e.setOrden(body.getOrden() == null ? 0 : body.getOrden());
     }
