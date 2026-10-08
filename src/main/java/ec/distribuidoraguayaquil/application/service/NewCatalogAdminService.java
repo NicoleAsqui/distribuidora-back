@@ -492,6 +492,7 @@ public class NewCatalogAdminService {
             }
         }
         e.setSku(sku);
+        applyUnidadVenta(e, body.getUnidadVenta(), body.getUnidadesContenido());
         e.setActivo(nvl(body.getActivo(), Boolean.TRUE));
     }
 
@@ -549,7 +550,9 @@ public class NewCatalogAdminService {
     private void applyVarianteFromProducto(VarianteEntity e, ProductoAdminDto body, boolean creating) {
         requireFk(disenoRepository, body.disenoId(), "disenoId");
         Long medidaId = resolveMedidaId(body);
-        ensureUniqueDisenoMedida(body.disenoId(), medidaId, creating ? null : e.getId());
+        String unidadVenta = normalizeUnidadVenta(body.unidadVenta());
+        ensureUniqueDisenoMedidaUnidad(
+                body.disenoId(), medidaId, unidadVenta, creating ? null : e.getId());
         e.setDisenoId(body.disenoId());
         e.setMedidaId(medidaId);
         if (creating) {
@@ -559,14 +562,41 @@ public class NewCatalogAdminService {
             e.setSku(allocateNextDgSku());
         }
         // En edición el SKU no se cambia (mantiene el histórico).
+        applyUnidadVenta(e, unidadVenta, body.unidadesContenido());
         e.setActivo(nvl(body.activo(), Boolean.TRUE));
     }
 
+    private void applyUnidadVenta(VarianteEntity e, String unidadVentaRaw, Integer unidadesContenido) {
+        String unidadVenta = normalizeUnidadVenta(unidadVentaRaw);
+        Integer contenido = unidadesContenido;
+        if ("unidad".equals(unidadVenta)) {
+            contenido = null;
+        } else if (contenido == null || contenido <= 0) {
+            throw badRequest("Indica cuántas unidades trae el " + unidadVenta + " (ej. 20, 48).");
+        }
+        e.setUnidadVenta(unidadVenta);
+        e.setUnidadesContenido(contenido);
+    }
+
+    private static String normalizeUnidadVenta(String raw) {
+        String v = raw == null ? "unidad" : raw.trim().toLowerCase(Locale.ROOT);
+        if (v.isBlank()) {
+            v = "unidad";
+        }
+        if (!Set.of("unidad", "paquete", "carton", "caja").contains(v)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "unidadVenta debe ser unidad, paquete, carton o caja");
+        }
+        return v;
+    }
+
     /**
-     * Un diseño no puede tener dos productos con la misma caja:
+     * Un diseño no puede tener dos productos con la misma caja y la misma unidad de venta:
      * largo×ancho×alto ≡ ancho×largo×alto.
      */
-    private void ensureUniqueDisenoMedida(Long disenoId, Long medidaId, Long excludeVarianteId) {
+    private void ensureUniqueDisenoMedidaUnidad(
+            Long disenoId, Long medidaId, String unidadVenta, Long excludeVarianteId) {
         MedidaEntity m = medidaRepository.findById(medidaId)
                 .orElseThrow(() -> badRequest("Medida no encontrada"));
         for (VarianteEntity other : varianteRepository.findByDisenoIdAndEquivalentMedida(
@@ -574,12 +604,17 @@ public class NewCatalogAdminService {
             if (excludeVarianteId != null && excludeVarianteId.equals(other.getId())) {
                 continue;
             }
+            String otherUv = other.getUnidadVenta() == null ? "unidad" : other.getUnidadVenta();
+            if (!unidadVenta.equalsIgnoreCase(otherUv)) {
+                continue;
+            }
             String dims = formatDims(m);
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Ya existe el producto " + other.getSku() + " con " + dims
-                            + " en este diseño (largo y ancho son intercambiables). Usa otra medida o edita "
-                            + other.getSku() + ".");
+                            + " y unidad de venta «" + unidadVenta
+                            + "» en este diseño (largo y ancho son intercambiables). Usa otra medida, "
+                            + "otra presentación o edita " + other.getSku() + ".");
         }
     }
 
@@ -588,10 +623,14 @@ public class NewCatalogAdminService {
                 ? String.valueOf(e.getMostSpecificCause().getMessage())
                 : String.valueOf(e.getMessage());
         String lower = raw.toLowerCase(Locale.ROOT);
-        if (lower.contains("variantes_diseno_medida_unique") || lower.contains("(diseno_id, medida_id)")) {
+        if (lower.contains("variantes_diseno_medida_unidad_uidx")
+                || lower.contains("variantes_diseno_medida_unique")
+                || lower.contains("(diseno_id, medida_id, unidad_venta)")
+                || lower.contains("(diseno_id, medida_id)")) {
             return new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Ya existe un producto con el mismo diseño y medida. Cambia largo×ancho×alto o edita el otro SKU.");
+                    "Ya existe un producto con el mismo diseño, medida y unidad de venta. "
+                            + "Cambia largo×ancho×alto, la presentación o edita el otro SKU.");
         }
         if (lower.contains("variantes_sku_key") || lower.contains("(sku)")) {
             return new ResponseStatusException(HttpStatus.CONFLICT, "Ese SKU ya está en uso.");
@@ -599,7 +638,7 @@ public class NewCatalogAdminService {
         log.warn("Conflicto al guardar producto: {}", raw);
         return new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "No se pudo guardar el producto por un conflicto de datos (diseño+medida o SKU duplicado).");
+                "No se pudo guardar el producto por un conflicto de datos (diseño+medida+unidad o SKU duplicado).");
     }
 
     /** Medida desde largo×ancho×alto (preferido) o medidaId legado. Alto opcional en Varios / Tarjetas. */
@@ -644,9 +683,14 @@ public class NewCatalogAdminService {
         BigDecimal l = scaleDim(largo);
         BigDecimal a = scaleDim(ancho);
         BigDecimal h = alto == null ? null : scaleDim(alto);
-        if (l.signum() <= 0 || a.signum() <= 0 || (h != null && h.signum() <= 0)) {
+        // En Varios/Tarjetas se permite 0×0 como “sin medida” (papel, oasis, etc.).
+        boolean allowZero = altoOpcional;
+        if (l.signum() < 0 || a.signum() < 0 || (h != null && h.signum() <= 0)
+                || (!allowZero && (l.signum() <= 0 || a.signum() <= 0))) {
             throw badRequest(h == null
-                    ? "largo y ancho deben ser mayores a 0"
+                    ? (allowZero
+                            ? "largo y ancho no pueden ser negativos (usa 0×0 si no aplica medida)"
+                            : "largo y ancho deben ser mayores a 0")
                     : "largo, ancho y alto deben ser mayores a 0");
         }
         String u = blank(unidad) ? "cm" : unidad.trim();
@@ -794,6 +838,8 @@ public class NewCatalogAdminService {
                 medida == null ? null : medida.getAlto(),
                 medida == null ? "cm" : medida.getUnidad(),
                 v.getSku(),
+                v.getUnidadVenta() == null ? "unidad" : v.getUnidadVenta(),
+                v.getUnidadesContenido(),
                 v.getActivo(),
                 precios,
                 imagenes,

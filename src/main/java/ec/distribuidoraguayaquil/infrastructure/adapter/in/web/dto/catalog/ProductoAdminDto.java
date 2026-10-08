@@ -17,6 +17,10 @@ public record ProductoAdminDto(
         BigDecimal alto,
         String unidad,
         String sku,
+        /** unidad | paquete | carton | caja */
+        String unidadVenta,
+        /** Unidades por empaque; null si unidad_venta = unidad */
+        Integer unidadesContenido,
         Boolean activo,
         List<PrecioLine> precios,
         List<ImagenLine> imagenes,

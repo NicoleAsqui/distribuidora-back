@@ -28,6 +28,14 @@ public class VarianteEntity {
     @Column(nullable = false, unique = true)
     private String sku;
 
+    /** Cómo se vende: unidad | paquete | carton | caja */
+    @Column(name = "unidad_venta", nullable = false)
+    private String unidadVenta = "unidad";
+
+    /** Unidades sueltas dentro del empaque (ej. 20 por paquete). Null si es unidad. */
+    @Column(name = "unidades_contenido")
+    private Integer unidadesContenido;
+
     @Column(nullable = false)
     private Boolean activo = Boolean.TRUE;
 }
