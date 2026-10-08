@@ -73,7 +73,9 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
 
     @Override
     public long nextSequence() {
-        return 1000 + repository.countAll() + 1;
+        // Usar el máximo PED-n existente (+1). count() colisionaba si había huecos
+        // (p. ej. solo queda PED-1002 → count=1 → generaba PED-1002 de nuevo).
+        return repository.maxPedSequence() + 1;
     }
 
     private Order toDomain(OrderEntity e) {
