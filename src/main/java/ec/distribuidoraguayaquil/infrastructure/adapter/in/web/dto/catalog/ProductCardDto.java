@@ -18,6 +18,8 @@ public record ProductCardDto(
         List<ProductVariantDto> variants,
         List<ProductTexturaDto> texturas,
         /** Galería del diseño (detalle); no se usa como foto por cada SKU en listados. */
-        List<DisenoImagenCardDto> disenoImagenes
+        List<DisenoImagenCardDto> disenoImagenes,
+        /** Familia del diseño: cartulina, acetato, mdf, carton, varios. */
+        String seccion
 ) {
 }

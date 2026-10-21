@@ -612,7 +612,8 @@ public class CatalogQueryService {
                 imageThumb,
                 variants,
                 texturas == null ? List.of() : texturas,
-                disenoImagenes == null ? List.of() : disenoImagenes);
+                disenoImagenes == null ? List.of() : disenoImagenes,
+                diseno == null ? null : diseno.getSeccion());
     }
 
     private List<IdeaDto> toIdeaDtos(List<IdeaEntity> ideas, boolean includeVariantes) {
