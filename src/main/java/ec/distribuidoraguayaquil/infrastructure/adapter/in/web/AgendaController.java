@@ -71,7 +71,15 @@ public class AgendaController {
     public AgendaService.AgendaEntryDto done(@PathVariable String token, @PathVariable String id,
                                              @RequestBody OrderAgendaRequests.WorkerDone body,
                                              HttpServletRequest http) {
-        return agenda.markDone(token, id, body.pin(), body.note(), clientKey(http));
+        return agenda.markDone(token, id, body.pin(), body.note(), Boolean.TRUE.equals(body.collectBalance()),
+                clientKey(http));
+    }
+
+    @PostMapping("/api/agenda/public/{token}/orders/{id}/payment")
+    public AgendaService.AgendaEntryDto payment(@PathVariable String token, @PathVariable String id,
+                                                @Valid @RequestBody OrderAgendaRequests.WorkerPayment body,
+                                                HttpServletRequest http) {
+        return agenda.addPayment(token, id, body.pin(), body.amount(), body.note(), clientKey(http));
     }
 
     @PostMapping("/api/agenda/public/{token}/orders/{id}/reschedule")

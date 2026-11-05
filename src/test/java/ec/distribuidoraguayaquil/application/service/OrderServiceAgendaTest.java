@@ -98,8 +98,13 @@ class OrderServiceAgendaTest {
         Order later = service.reschedule(o.id(), Instant.parse("2026-11-14T17:00:00Z"), "faltó material", "Miguel");
         assertEquals(Instant.parse("2026-11-14T17:00:00Z"), later.scheduledAt());
 
-        Order done = service.updateStatus(o.id(), RequestStatus.DONE, null, null, null, "Sarita");
+        // Con saldo pendiente no se puede marcar hecho…
+        assertThrows(ResponseStatusException.class,
+                () -> service.updateStatus(o.id(), RequestStatus.DONE, null, null, null, "Sarita"));
+        // …pero sí si cobra el saldo en el mismo paso.
+        Order done = service.updateStatus(o.id(), RequestStatus.DONE, null, new BigDecimal("60"), null, "Sarita");
         assertEquals("Sarita", done.doneBy());
+        assertEquals(0, done.balance().signum());
         assertNotNull(done.doneAt());
 
         // Reabrir lo devuelve al calendario (sin marca de hecho).
@@ -110,13 +115,35 @@ class OrderServiceAgendaTest {
         assertTrue(history.stream().anyMatch(e -> e.type().equals("PAYMENT") && e.actor().equals("Jeymy")));
         assertTrue(history.stream().anyMatch(e -> e.type().equals("SCHEDULE") && e.message().contains("faltó material")
                 && e.actor().equals("Miguel")));
-        assertTrue(history.stream().anyMatch(e -> e.type().equals("STATUS") && e.message().contains("saldo pendiente")
+        assertTrue(history.stream().anyMatch(e -> e.type().equals("PAYMENT") && e.message().startsWith("Pago completo")
                 && e.actor().equals("Sarita")));
+    }
+
+    @Test
+    void volverAPendienteAnulaAbonosYFecha() {
+        Order o = service.createManual(newOrder(null), "Jeymy");
+        service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), new BigDecimal("30"), null, "Jeymy");
+        Order back = service.updateStatus(o.id(), RequestStatus.PENDING, null, null, "prueba", "Jeymy");
+        assertEquals(0, back.paidAmount().signum());
+        assertNull(back.scheduledAt());
+        assertTrue(service.events(o.id()).stream().anyMatch(e -> e.message().contains("abonos anulados")));
+    }
+
+    @Test
+    void abonoNoSuperaSaldo() {
+        Order o = service.createManual(newOrder(null), "Jeymy");
+        service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), null, null, "Jeymy");
+        assertThrows(ResponseStatusException.class, () -> service.addPayment(o.id(), new BigDecimal("150"), null, "x"));
+        Order p1 = service.addPayment(o.id(), new BigDecimal("30"), null, "Miguel");
+        assertEquals(new BigDecimal("70.00"), p1.balance());
+        Order p2 = service.addPayment(o.id(), new BigDecimal("70"), null, "Miguel");
+        assertEquals(0, p2.balance().signum());
     }
 
     @Test
     void abonoCompletaSaldo() {
         Order o = service.createManual(newOrder(null), "Jeymy");
+        service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), null, null, "Jeymy");
         Order p = service.addPayment(o.id(), new BigDecimal("100"), "transferencia", "Jeymy");
         assertEquals(0, p.balance().signum());
         assertThrows(ResponseStatusException.class, () -> service.addPayment(o.id(), BigDecimal.ZERO, null, "x"));

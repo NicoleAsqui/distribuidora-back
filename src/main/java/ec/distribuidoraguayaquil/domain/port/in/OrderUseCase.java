@@ -20,6 +20,9 @@ public interface OrderUseCase {
     /** Pedido ingresado a mano desde el admin. */
     Order createManual(Order order, String actor);
 
+    /** Pedido creado desde una cotización aceptada; conserva el total exacto de la cotización. */
+    Order createFromQuote(Order order, java.math.BigDecimal quoteTotal, String actor, String quoteCode);
+
     /**
      * Cambia el estado. Al pasar a PAID exige fecha agendada (scheduledAt) y puede registrar un abono inicial.
      */

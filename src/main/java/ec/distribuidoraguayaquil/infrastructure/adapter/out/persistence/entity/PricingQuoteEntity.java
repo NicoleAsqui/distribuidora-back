@@ -102,6 +102,12 @@ public class PricingQuoteEntity {
     public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
     public BigDecimal getIva() { return iva; }
     public void setIva(BigDecimal iva) { this.iva = iva; }
+    /** Pedido creado a partir de esta cotización (PED-…), si ya se convirtió. */
+    @Column(name = "order_code", length = 40)
+    private String orderCode;
+
+    public String getOrderCode() { return orderCode; }
+    public void setOrderCode(String orderCode) { this.orderCode = orderCode; }
     public String getEditToken() { return editToken; }
     public void setEditToken(String editToken) { this.editToken = editToken; }
 }

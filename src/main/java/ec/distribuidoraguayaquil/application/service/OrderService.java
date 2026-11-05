@@ -80,6 +80,21 @@ public class OrderService implements OrderUseCase {
         return saved;
     }
 
+    @Override
+    @Transactional
+    public Order createFromQuote(Order order, BigDecimal quoteTotal, String actor, String quoteCode) {
+        Order base = newOrder(order, "cotizacion");
+        BigDecimal total = quoteTotal == null || quoteTotal.signum() <= 0
+                ? base.total()
+                : quoteTotal.setScale(2, RoundingMode.HALF_UP);
+        Order saved = repository.save(new Order(base.id(), base.code(), base.clientName(), base.clientEmail(),
+                base.clientPhone(), base.notes(), base.checkoutJson(), base.items(), total, base.status(),
+                base.createdAt(), base.source(), null, null, null, null, BigDecimal.ZERO));
+        log(saved.id(), actor, "CREATED", "Pedido creado desde la cotización " + quoteCode + " (aceptada por el cliente)",
+                null);
+        return saved;
+    }
+
     private Order newOrder(Order order, String source) {
         List<OrderItem> items = order.items() == null ? List.of() : order.items();
         BigDecimal total = computeTotal(items, order.checkoutJson());
@@ -142,6 +157,17 @@ public class OrderService implements OrderUseCase {
         Instant doneAt = o.doneAt();
         String doneBy = o.doneBy();
         BigDecimal paid = nz(o.paidAmount());
+        BigDecimal total = nz(o.total());
+        BigDecimal dep = deposit != null && deposit.signum() > 0 ? deposit.setScale(2, RoundingMode.HALF_UP) : null;
+        if (dep != null && status != RequestStatus.PENDING && status != RequestStatus.CANCELED) {
+            if (paid.add(dep).compareTo(total) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El abono supera el saldo pendiente ($" + total.subtract(paid).setScale(2, RoundingMode.HALF_UP) + ").");
+            }
+            paid = paid.add(dep).setScale(2, RoundingMode.HALF_UP);
+        } else {
+            dep = null;
+        }
         StringBuilder msg = new StringBuilder("Estado: ")
                 .append(label(o.status())).append(" → ").append(label(status));
 
@@ -167,15 +193,31 @@ public class OrderService implements OrderUseCase {
                 doneBy = null;
             }
             case DONE, DELIVERED -> {
+                BigDecimal saldo = total.subtract(paid);
+                if (saldo.signum() > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "No se puede marcar como hecho: queda un saldo de $" + saldo.setScale(2, RoundingMode.HALF_UP)
+                                    + ". Registra el pago primero.");
+                }
                 doneAt = now;
                 doneBy = actor;
-                BigDecimal saldo = o.total() == null ? BigDecimal.ZERO : nz(o.total()).subtract(paid);
-                if (saldo.signum() > 0) {
-                    msg.append(" · ⚠ saldo pendiente $").append(saldo.setScale(2, RoundingMode.HALF_UP));
+            }
+            case PENDING -> {
+                // Volver a Pendiente (solo admin): anula abonos y fecha; sirve para pruebas o correcciones.
+                if (paid.signum() > 0) {
+                    msg.append(" · abonos anulados ($").append(paid.setScale(2, RoundingMode.HALF_UP)).append(")");
                 }
+                if (scheduled != null) {
+                    msg.append(" · se quitó la fecha agendada");
+                }
+                paid = BigDecimal.ZERO;
+                paidAt = null;
+                scheduled = null;
+                doneAt = null;
+                doneBy = null;
             }
             default -> {
-                if (status == RequestStatus.PENDING || status == RequestStatus.CANCELED) {
+                if (status == RequestStatus.CANCELED) {
                     doneAt = null;
                     doneBy = null;
                 }
@@ -185,15 +227,11 @@ public class OrderService implements OrderUseCase {
             msg.append(" · ").append(note.trim());
         }
 
-        if (deposit != null && deposit.signum() > 0) {
-            paid = paid.add(deposit).setScale(2, RoundingMode.HALF_UP);
-        }
         Order saved = repository.save(o.withAgenda(status, scheduled, paidAt, doneAt, doneBy, paid));
-        log(id, actor, "STATUS", msg.toString(), null);
-        if (deposit != null && deposit.signum() > 0) {
-            log(id, actor, "PAYMENT", "Abono registrado · saldo $" + saved.balance().setScale(2, RoundingMode.HALF_UP),
-                    deposit.setScale(2, RoundingMode.HALF_UP));
+        if (dep != null) {
+            log(id, actor, "PAYMENT", paymentMessage(saved, null), dep);
         }
+        log(id, actor, "STATUS", msg.toString(), null);
         return saved;
     }
 
@@ -223,12 +261,19 @@ public class OrderService implements OrderUseCase {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El abono debe ser mayor a 0.");
         }
         Order o = getById(id);
+        if (o.status() == RequestStatus.CANCELED || o.status() == RequestStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Primero pasa el pedido a Pagado para registrar abonos.");
+        }
+        BigDecimal saldo = o.balance();
+        if (amount.setScale(2, RoundingMode.HALF_UP).compareTo(saldo) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El abono supera el saldo pendiente ($" + saldo.setScale(2, RoundingMode.HALF_UP) + ").");
+        }
         BigDecimal paid = nz(o.paidAmount()).add(amount).setScale(2, RoundingMode.HALF_UP);
         Order saved = repository.save(o.withAgenda(o.status(), o.scheduledAt(), o.paidAt(), o.doneAt(), o.doneBy(),
                 paid));
-        String msg = "Abono registrado · saldo $" + saved.balance().setScale(2, RoundingMode.HALF_UP)
-                + (note == null || note.isBlank() ? "" : " · " + note.trim());
-        log(id, actor, "PAYMENT", msg, amount.setScale(2, RoundingMode.HALF_UP));
+        log(id, actor, "PAYMENT", paymentMessage(saved, note), amount.setScale(2, RoundingMode.HALF_UP));
         return saved;
     }
 
@@ -263,6 +308,12 @@ public class OrderService implements OrderUseCase {
     }
 
     // ---------------- helpers ----------------
+
+    private static String paymentMessage(Order saved, String note) {
+        BigDecimal saldo = saved.balance().setScale(2, RoundingMode.HALF_UP);
+        String head = saldo.signum() == 0 ? "Pago completo · saldo $0.00" : "Abono registrado · queda saldo $" + saldo;
+        return head + (note == null || note.isBlank() ? "" : " · " + note.trim());
+    }
 
     private OrderEventEntity log(String orderId, String actor, String type, String message, BigDecimal amount) {
         OrderEventEntity e = new OrderEventEntity();

@@ -1,6 +1,15 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.QuoteAdminMailService;
+import ec.distribuidoraguayaquil.domain.model.Order;
+import ec.distribuidoraguayaquil.domain.model.OrderItem;
+import ec.distribuidoraguayaquil.domain.port.in.AuthUseCase;
+import ec.distribuidoraguayaquil.domain.port.in.OrderUseCase;
+import jakarta.servlet.http.HttpServletRequest;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.PricingQuoteEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.PricingQuoteJpaRepository;
 import org.springframework.http.HttpStatus;
@@ -31,14 +40,142 @@ public class PricingQuoteController {
     private final PricingQuoteJpaRepository repository;
     private final ObjectMapper objectMapper;
     private final QuoteAdminMailService quoteAdminMailService;
+    private final OrderUseCase orderUseCase;
+    private final AuthUseCase authUseCase;
 
     public PricingQuoteController(
             PricingQuoteJpaRepository repository,
             ObjectMapper objectMapper,
-            QuoteAdminMailService quoteAdminMailService) {
+            QuoteAdminMailService quoteAdminMailService,
+            OrderUseCase orderUseCase,
+            AuthUseCase authUseCase) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.quoteAdminMailService = quoteAdminMailService;
+        this.orderUseCase = orderUseCase;
+        this.authUseCase = authUseCase;
+    }
+
+    /**
+     * Cotización aceptada por el cliente → pedido (estado Pendiente, origen "cotizacion").
+     * Luego el admin lo pasa a Pagado con fecha y abono y entra al calendario.
+     * body opcional: { fulfillmentMethod, address, city, references, mapsUrl, paymentMethod }
+     */
+    @PostMapping("/{id}/to-order")
+    public Order toOrder(@PathVariable String id, @RequestBody(required = false) Map<String, Object> body,
+                         HttpServletRequest http) {
+        PricingQuoteEntity q = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        if (q.getOrderCode() != null && !q.getOrderCode().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Esta cotización ya es el pedido " + q.getOrderCode() + ".");
+        }
+        Map<String, Object> extra = body == null ? Map.of() : body;
+        List<OrderItem> items = quoteItems(q);
+        if (items.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cotización no tiene productos.");
+        }
+        ObjectNode c = objectMapper.createObjectNode();
+        c.put("source", "cotizacion");
+        c.put("quoteId", q.getId());
+        c.put("quoteCode", q.getCode());
+        c.put("fullName", asString(q.getClientName()));
+        c.put("phone", asString(q.getClientPhone()));
+        c.put("email", asString(q.getClientEmail()));
+        c.put("requiresInvoice", Boolean.TRUE.equals(q.getRequiresInvoice()));
+        String fm = asString(extra.get("fulfillmentMethod"));
+        c.put("fulfillmentMethod", fm.isBlank() ? "pickup" : fm);
+        c.put("deliveryZone", "guayaquil");
+        c.put("city", asString(extra.getOrDefault("city", "Guayaquil")));
+        c.put("address", asString(extra.get("address")));
+        c.put("references", asString(extra.get("references")));
+        c.put("mapsUrl", asString(extra.get("mapsUrl")));
+        c.put("paymentMethod", asString(extra.get("paymentMethod")));
+        if (q.getDeliveryDate() != null && q.getDeliveryDate().matches("\\d{4}-\\d{2}-\\d{2}")) {
+            c.put("estimatedDate", q.getDeliveryDate());
+        }
+        String checkoutJson;
+        try {
+            checkoutJson = objectMapper.writeValueAsString(c);
+        } catch (JacksonException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos inválidos");
+        }
+        String notes = "Desde cotización " + q.getCode()
+                + (q.getNotes() == null || q.getNotes().isBlank() ? "" : "\n" + q.getNotes().trim());
+        Order draft = new Order(null, null,
+                asString(q.getClientName()).isBlank() ? "Cliente" : q.getClientName(),
+                q.getClientEmail(), q.getClientPhone(), notes, checkoutJson, items, null, null, null);
+        Order order = orderUseCase.createFromQuote(draft, q.getTotal(), actor(http), q.getCode());
+        q.setOrderCode(order.code());
+        q.setStatus("accepted");
+        repository.save(q);
+        return order;
+    }
+
+    /** Líneas de la cotización (simple o de motor) → ítems de pedido con su precio unitario. */
+    private List<OrderItem> quoteItems(PricingQuoteEntity q) {
+        List<OrderItem> out = new ArrayList<>();
+        try {
+            JsonNode arr = objectMapper.readTree(q.getItemsJson() == null ? "[]" : q.getItemsJson());
+            if (!arr.isArray()) {
+                return out;
+            }
+            for (JsonNode it : arr) {
+                int qty = Math.max(1, it.path("cantidad").asInt(1));
+                JsonNode pricing = it.path("pricing");
+                BigDecimal line = dec(pricing.path("lineTotal"));
+                if (line.signum() == 0) {
+                    line = dec(it.path("lineTotal"));
+                }
+                BigDecimal unit = dec(pricing.path("precioUnidad"));
+                if (unit.signum() == 0) {
+                    unit = dec(it.path("precioUnitario"));
+                }
+                if (unit.signum() == 0 && line.signum() > 0) {
+                    unit = line.divide(BigDecimal.valueOf(qty), 2, RoundingMode.HALF_UP);
+                }
+                String disenoNombre = it.path("disenoNombre").asText("");
+                String label = it.path("label").asText("");
+                String name = !disenoNombre.isBlank() ? disenoNombre : (label.isBlank() ? "Producto" : label);
+                String size = "";
+                if (it.has("largo")) {
+                    size = fmt(it.path("largo")) + "×" + fmt(it.path("ancho")) + "×" + fmt(it.path("altoBase")) + " cm";
+                }
+                String color = it.path("material").asText("");
+                String image = it.path("imageUrl").asText("");
+                out.add(new OrderItem(q.getCode(), name, size, color,
+                        unit.setScale(2, RoundingMode.HALF_UP), qty, image.isBlank() ? null : image));
+            }
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se pudieron leer los productos de la cotización.");
+        }
+        return out;
+    }
+
+    private static BigDecimal dec(JsonNode n) {
+        if (n == null || n.isMissingNode() || n.isNull()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(n.asText("0"));
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private static String fmt(JsonNode n) {
+        BigDecimal v = dec(n).stripTrailingZeros();
+        return v.signum() == 0 ? "0" : v.toPlainString();
+    }
+
+    private String actor(HttpServletRequest http) {
+        String auth = http.getHeader("Authorization");
+        String token = auth != null && auth.startsWith("Bearer ") ? auth.substring(7) : http.getHeader("X-Admin-Token");
+        String user = authUseCase.usernameFromToken(token);
+        if (user == null || user.isBlank()) {
+            return "Admin";
+        }
+        return Character.toUpperCase(user.charAt(0)) + user.substring(1);
     }
 
     @GetMapping
@@ -86,6 +223,7 @@ public class PricingQuoteController {
         body.putIfAbsent("iva", existing.getIva());
         PricingQuoteEntity e = fromBody(body, false);
         e.setEditToken(ensureEditToken(existing));
+        e.setOrderCode(existing.getOrderCode());
         return toMap(repository.save(e));
     }
 
@@ -237,6 +375,7 @@ public class PricingQuoteController {
         map.put("notes", e.getNotes());
         map.put("kind", e.getKind() == null || e.getKind().isBlank() ? "motor" : e.getKind());
         map.put("requiresInvoice", Boolean.TRUE.equals(e.getRequiresInvoice()));
+        map.put("orderCode", e.getOrderCode());
         BigDecimal total = e.getTotal() == null ? BigDecimal.ZERO : e.getTotal();
         BigDecimal subtotal = e.getSubtotal() == null ? total : e.getSubtotal();
         BigDecimal iva = e.getIva() == null ? BigDecimal.ZERO : e.getIva();

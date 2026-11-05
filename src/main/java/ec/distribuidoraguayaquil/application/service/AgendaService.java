@@ -227,16 +227,36 @@ public class AgendaService {
         return toEntry(o, true);
     }
 
+    /**
+     * Marca como hecho. Si queda saldo, el trabajador debe confirmar que lo cobró (collectBalance = true):
+     * se registra el pago del saldo y luego se marca hecho. Sin saldo en $0 no se puede.
+     */
     @Transactional
-    public AgendaEntryDto markDone(String token, String id, String pin, String note, String clientKey) {
+    public AgendaEntryDto markDone(String token, String id, String pin, String note, boolean collectBalance,
+                                   String clientKey) {
         requireToken(token);
         String who = staffFromPin(pin, clientKey);
         Order o = orders.getById(id);
         if (o.status() != RequestStatus.PAID) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se marcan como hechos los pedidos pagados.");
         }
-        Order saved = orders.updateStatus(id, RequestStatus.DONE, null, null, note, who);
+        BigDecimal saldo = o.balance();
+        BigDecimal deposit = saldo.signum() > 0 && collectBalance ? saldo : null;
+        Order saved = orders.updateStatus(id, RequestStatus.DONE, null, deposit, note, who);
         return toEntry(saved, true);
+    }
+
+    /** Abono registrado por un trabajador con su PIN. */
+    @Transactional
+    public AgendaEntryDto addPayment(String token, String id, String pin, BigDecimal amount, String note,
+                                     String clientKey) {
+        requireToken(token);
+        String who = staffFromPin(pin, clientKey);
+        Order o = orders.getById(id);
+        if (o.status() != RequestStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se registran abonos en pedidos pagados.");
+        }
+        return toEntry(orders.addPayment(id, amount, note, who), true);
     }
 
     @Transactional

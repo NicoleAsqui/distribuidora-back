@@ -75,7 +75,7 @@ public class QuoteAdminMailService {
         if (pdfBase64 == null || pdfBase64.isBlank()) {
             throw new IllegalArgumentException("Falta el PDF de la cotización");
         }
-        String subject = "Cotización " + quote.getCode() + " — Distribuidora Guayaquil";
+        String subject = "Tu cotización " + quote.getCode() + " · Distribuidora Guayaquil";
         String attachName = (filename == null || filename.isBlank())
                 ? quote.getCode() + ".pdf"
                 : filename.trim();
@@ -95,81 +95,150 @@ public class QuoteAdminMailService {
         );
     }
 
-    private String buildClientManualHtml(PricingQuoteEntity quote) {
-        StringBuilder itemsHtml = new StringBuilder();
+    /** WhatsApp de atención al cliente (botón del correo). */
+    private static final String CLIENT_WHATSAPP = "593983867216";
+
+    /**
+     * Correo al cliente con la cotización adjunta. Diseño con tablas e estilos en línea
+     * (compatible con Gmail, Outlook y celulares). Correo automático: se pide escribir por WhatsApp.
+     */
+    String buildClientManualHtml(PricingQuoteEntity quote) {
+        StringBuilder rows = new StringBuilder();
         try {
             JsonNode items = objectMapper.readTree(quote.getItemsJson() == null ? "[]" : quote.getItemsJson());
             if (items.isArray()) {
                 for (JsonNode item : items) {
-                    String label = text(item, "label");
+                    String label = text(item, "disenoNombre");
+                    if (label.isBlank()) {
+                        label = text(item, "label");
+                    }
                     int qty = item.path("cantidad").asInt(0);
-                    BigDecimal unit = decimal(item.path("precioUnitario"));
-                    BigDecimal line = decimal(item.path("lineTotal"));
+                    JsonNode pricing = item.path("pricing");
+                    BigDecimal unit = decimal(pricing.path("precioUnidad"));
+                    if (unit.signum() == 0) {
+                        unit = decimal(item.path("precioUnitario"));
+                    }
+                    BigDecimal line = decimal(pricing.path("lineTotal"));
+                    if (line.signum() == 0) {
+                        line = decimal(item.path("lineTotal"));
+                    }
                     if (line.signum() == 0) {
                         line = unit.multiply(BigDecimal.valueOf(qty));
                     }
-                    itemsHtml.append("<tr>")
-                            .append("<td style='padding:10px;border:1px solid #e2e8f0;'>")
-                            .append(esc(label.isBlank() ? "Producto" : label)).append("</td>")
-                            .append("<td style='padding:10px;border:1px solid #e2e8f0;text-align:center;'>")
+                    String medida = "";
+                    if (item.has("largo")) {
+                        medida = decimal(item.path("largo")).stripTrailingZeros().toPlainString() + " × "
+                                + decimal(item.path("ancho")).stripTrailingZeros().toPlainString() + " × "
+                                + decimal(item.path("altoBase")).stripTrailingZeros().toPlainString() + " cm";
+                    }
+                    rows.append("<tr>")
+                            .append("<td style=\"padding:12px 14px;border-bottom:1px solid #eef2f6;\">")
+                            .append("<div style=\"font-weight:700;color:#1a2744;font-size:14px;\">")
+                            .append(esc(label.isBlank() ? "Producto" : label)).append("</div>")
+                            .append(medida.isBlank() ? "" : "<div style=\"color:#64748b;font-size:12px;margin-top:2px;\">"
+                                    + esc(medida) + "</div>")
+                            .append("</td>")
+                            .append("<td align=\"center\" style=\"padding:12px 8px;border-bottom:1px solid #eef2f6;color:#334155;font-size:14px;\">")
                             .append(qty).append("</td>")
-                            .append("<td style='padding:10px;border:1px solid #e2e8f0;text-align:right;'>$")
-                            .append(money(unit)).append("</td>")
-                            .append("<td style='padding:10px;border:1px solid #e2e8f0;text-align:right;'><strong>$")
-                            .append(money(line)).append("</strong></td>")
+                            .append("<td align=\"right\" style=\"padding:12px 14px;border-bottom:1px solid #eef2f6;color:#1a2744;font-size:14px;font-weight:700;white-space:nowrap;\">$")
+                            .append(money(line)).append("</td>")
                             .append("</tr>");
                 }
             }
         } catch (Exception e) {
-            itemsHtml.append("<tr><td colspan='4' style='padding:10px;'>Ver detalle en el PDF adjunto</td></tr>");
+            rows.setLength(0);
+        }
+        if (rows.isEmpty()) {
+            rows.append("<tr><td colspan=\"3\" style=\"padding:14px;color:#64748b;font-size:14px;\">")
+                    .append("Encuentra el detalle completo en el PDF adjunto.</td></tr>");
         }
 
         boolean withIva = Boolean.TRUE.equals(quote.getRequiresInvoice());
         BigDecimal subtotal = quote.getSubtotal() == null ? BigDecimal.ZERO : quote.getSubtotal();
         BigDecimal iva = quote.getIva() == null ? BigDecimal.ZERO : quote.getIva();
         BigDecimal total = quote.getTotal() == null ? BigDecimal.ZERO : quote.getTotal();
-        String client = safe(quote.getClientName()).isBlank() ? "cliente" : quote.getClientName().trim();
+        String client = safe(quote.getClientName()).isBlank() ? "" : " " + quote.getClientName().trim().split("\\s+")[0];
+        String waText = "Hola, tengo una consulta sobre mi cotización " + safe(quote.getCode()) + " de Distribuidora Guayaquil.";
+        String waUrl = "https://wa.me/" + CLIENT_WHATSAPP + "?text="
+                + java.net.URLEncoder.encode(waText, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        String ivaRow = withIva
+                ? "<tr><td style=\"padding:4px 0;color:#64748b;font-size:14px;\">IVA 15%</td>"
+                    + "<td align=\"right\" style=\"padding:4px 0;color:#334155;font-size:14px;\">$" + money(iva) + "</td></tr>"
+                : "";
 
         return """
-                <div style="font-family:Arial,sans-serif;color:#0f172a;max-width:640px;">
-                  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin:0 0 18px;">
-                    <p style="margin:0;font-size:13px;color:#475569;line-height:1.45;">
-                      <strong>Mensaje automático del sistema.</strong>
-                      Este correo se generó al emitir una cotización desde Distribuidora Guayaquil.
-                      <strong>Por favor no responder a este mensaje</strong> — la bandeja no es monitoreada.
-                      Si necesita coordinar, contáctenos por los canales habituales de la empresa.
-                    </p>
-                  </div>
-                  <h2 style="margin:0 0 8px;">Cotización %s</h2>
-                  <p style="margin:0 0 16px;color:#64748b;">Hola %s, adjuntamos tu cotización en PDF.</p>
-                  <table style="width:100%%;border-collapse:collapse;font-size:14px;margin-bottom:12px;">
-                    <thead>
-                      <tr style="background:#f8fafc;">
-                        <th style="padding:10px;border:1px solid #e2e8f0;text-align:left;">Producto</th>
-                        <th style="padding:10px;border:1px solid #e2e8f0;text-align:center;">Cant.</th>
-                        <th style="padding:10px;border:1px solid #e2e8f0;text-align:right;">P. unit.</th>
-                        <th style="padding:10px;border:1px solid #e2e8f0;text-align:right;">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody>%s</tbody>
-                  </table>
-                  <p style="margin:8px 0 0;text-align:right;color:#64748b;">Subtotal: <strong>$%s</strong></p>
-                  %s
-                  <p style="margin:4px 0 0;text-align:right;font-size:18px;">Total: <strong>$%s USD</strong></p>
-                  <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;">
-                    Este documento no es un comprobante contable formal. Validez: 1 semana desde la emisión.
-                  </p>
-                </div>
+                <!doctype html>
+                <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+                <title>Cotización %1$s</title></head>
+                <body style="margin:0;padding:0;background:#f3f6f9;font-family:Arial,Helvetica,sans-serif;">
+                <div style="display:none;max-height:0;overflow:hidden;color:#f3f6f9;">Gracias por preferirnos. Adjuntamos tu cotización %1$s.</div>
+                <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background:#f3f6f9;padding:24px 12px;">
+                  <tr><td align="center">
+                    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 8px 24px rgba(26,39,68,.08);">
+                      <tr><td style="background:#1a2744;padding:26px 28px;">
+                        <div style="color:#5fe0e8;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">Distribuidora Guayaquil</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:800;margin-top:6px;">Tu cotización está lista ✨</div>
+                        <div style="color:#c8d3e6;font-size:14px;margin-top:4px;">Código <strong style="color:#ffffff;">%1$s</strong></div>
+                      </td></tr>
+                      <tr><td style="padding:26px 28px 6px;">
+                        <p style="margin:0 0 10px;font-size:17px;color:#1a2744;font-weight:700;">¡Saludos%2$s!</p>
+                        <p style="margin:0 0 6px;font-size:15px;line-height:1.6;color:#334155;">
+                          Gracias por preferirnos. Adjuntamos tu cotización en <strong>PDF</strong> con todo el detalle.
+                          Revísala con calma y cuéntanos si tienes alguna duda; quedamos al pendiente para realizar tu pedido.
+                        </p>
+                      </td></tr>
+                      <tr><td style="padding:14px 28px 4px;">
+                        <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="border:1px solid #eef2f6;border-radius:14px;overflow:hidden;">
+                          <tr style="background:#f8fafc;">
+                            <th align="left" style="padding:10px 14px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Producto</th>
+                            <th align="center" style="padding:10px 8px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Cant.</th>
+                            <th align="right" style="padding:10px 14px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Total</th>
+                          </tr>
+                          %3$s
+                        </table>
+                      </td></tr>
+                      <tr><td style="padding:10px 28px 0;">
+                        <table role="presentation" width="100%%" cellpadding="0" cellspacing="0">
+                          <tr><td style="padding:4px 0;color:#64748b;font-size:14px;">Subtotal</td>
+                              <td align="right" style="padding:4px 0;color:#334155;font-size:14px;">$%4$s</td></tr>
+                          %5$s
+                          <tr><td style="padding:10px 0 0;color:#1a2744;font-size:18px;font-weight:800;border-top:2px solid #e0f7f9;">Total</td>
+                              <td align="right" style="padding:10px 0 0;color:#00a3ad;font-size:22px;font-weight:800;border-top:2px solid #e0f7f9;">$%6$s USD</td></tr>
+                        </table>
+                      </td></tr>
+                      <tr><td style="padding:20px 28px 0;">
+                        <div style="background:#fff8e1;border-left:4px solid #f5b400;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;color:#5b4a00;">
+                          <strong>Tiempo de elaboración y entrega:</strong> pedidos pequeños, de 3 a 7 días hábiles;
+                          pedidos grandes, de 1 a 2 semanas (no se cuentan fines de semana ni feriados).
+                          ¿Lo necesitas con urgencia? Conversa con un asesor.
+                        </div>
+                      </td></tr>
+                      <tr><td align="center" style="padding:26px 28px 8px;">
+                        <a href="%7$s" target="_blank"
+                           style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-weight:800;font-size:16px;padding:15px 28px;border-radius:999px;">
+                          💬 Escríbenos por WhatsApp
+                        </a>
+                        <div style="font-size:13px;color:#64748b;margin-top:10px;">+593 98 386 7216</div>
+                      </td></tr>
+                      <tr><td style="padding:18px 28px 26px;">
+                        <div style="background:#f1f5f9;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.55;color:#64748b;text-align:center;">
+                          Este es un <strong>correo automático</strong>, por favor <strong>no respondas a este mensaje</strong>.
+                          Para cualquier consulta escríbenos por WhatsApp. Esta cotización tiene una validez de 1 semana.
+                        </div>
+                      </td></tr>
+                    </table>
+                    <div style="font-size:12px;color:#94a3b8;margin-top:14px;">Distribuidora Guayaquil · Cajas y empaques a todo el Ecuador</div>
+                  </td></tr>
+                </table>
+                </body></html>
                 """.formatted(
                 esc(quote.getCode()),
                 esc(client),
-                itemsHtml,
+                rows,
                 money(subtotal),
-                withIva
-                        ? "<p style=\"margin:4px 0 0;text-align:right;color:#64748b;\">IVA: <strong>$"
-                            + money(iva) + "</strong></p>"
-                        : "<p style=\"margin:4px 0 0;text-align:right;color:#64748b;\">Sin IVA</p>",
-                money(total)
+                ivaRow,
+                money(total),
+                esc(waUrl)
         );
     }
 

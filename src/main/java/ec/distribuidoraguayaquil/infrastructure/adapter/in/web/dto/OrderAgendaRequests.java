@@ -22,7 +22,11 @@ public final class OrderAgendaRequests {
     public record StaffUpsert(String nombre, String pin, Boolean activo) {
     }
 
-    public record WorkerDone(String pin, String note) {
+    /** collectBalance = el trabajador confirma que cobró el saldo pendiente. */
+    public record WorkerDone(String pin, String note, Boolean collectBalance) {
+    }
+
+    public record WorkerPayment(String pin, @NotNull BigDecimal amount, String note) {
     }
 
     public record WorkerReschedule(String pin, @NotNull Instant scheduledAt, String reason) {
