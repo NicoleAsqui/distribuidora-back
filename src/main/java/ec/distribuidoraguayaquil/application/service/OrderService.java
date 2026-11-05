@@ -1,30 +1,49 @@
 package ec.distribuidoraguayaquil.application.service;
 
 import ec.distribuidoraguayaquil.domain.model.Order;
+import ec.distribuidoraguayaquil.domain.model.OrderEvent;
 import ec.distribuidoraguayaquil.domain.model.OrderItem;
 import ec.distribuidoraguayaquil.domain.model.RequestStatus;
 import ec.distribuidoraguayaquil.domain.port.in.OrderUseCase;
 import ec.distribuidoraguayaquil.domain.port.out.OrderRepositoryPort;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.OrderEventEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.OrderEventJpaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
 public class OrderService implements OrderUseCase {
 
+    /** Ecuador continental (UTC−5, sin horario de verano). */
+    public static final ZoneId ECUADOR = ZoneId.of("America/Guayaquil");
+    private static final DateTimeFormatter FMT =
+            DateTimeFormatter.ofPattern("EEE d MMM yyyy, HH:mm", Locale.forLanguageTag("es-EC")).withZone(ECUADOR);
+
+    private static final BigDecimal PICKUP_DISCOUNT_RATE = new BigDecimal("0.03");
+    private static final BigDecimal IVA_RATE = new BigDecimal("0.15");
+    private static final BigDecimal CARD_SURCHARGE_RATE = new BigDecimal("0.06");
+
     private final OrderRepositoryPort repository;
+    private final OrderEventJpaRepository events;
     private final ObjectMapper objectMapper;
 
-    public OrderService(OrderRepositoryPort repository, ObjectMapper objectMapper) {
+    public OrderService(OrderRepositoryPort repository, OrderEventJpaRepository events, ObjectMapper objectMapper) {
         this.repository = repository;
+        this.events = events;
         this.objectMapper = objectMapper;
     }
 
@@ -45,22 +64,27 @@ public class OrderService implements OrderUseCase {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
     }
 
-    private static final BigDecimal PICKUP_DISCOUNT_RATE = new BigDecimal("0.03");
+    @Override
+    @Transactional
+    public Order create(Order order) {
+        Order saved = repository.save(newOrder(order, "web"));
+        log(saved.id(), "Cliente (web)", "CREATED", "Pedido recibido desde la web", null);
+        return saved;
+    }
 
     @Override
-    public Order create(Order order) {
+    @Transactional
+    public Order createManual(Order order, String actor) {
+        Order saved = repository.save(newOrder(order, "manual"));
+        log(saved.id(), actor, "CREATED", "Pedido ingresado manualmente", null);
+        return saved;
+    }
+
+    private Order newOrder(Order order, String source) {
         List<OrderItem> items = order.items() == null ? List.of() : order.items();
-        BigDecimal subtotal = items.stream()
-                .map(i -> i.price().multiply(BigDecimal.valueOf(i.qty())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-        BigDecimal total = subtotal;
-        if (isPickupCheckout(order.checkoutJson()) && subtotal.signum() > 0) {
-            BigDecimal discount = subtotal.multiply(PICKUP_DISCOUNT_RATE).setScale(2, RoundingMode.HALF_UP);
-            total = subtotal.subtract(discount).setScale(2, RoundingMode.HALF_UP);
-        }
+        BigDecimal total = computeTotal(items, order.checkoutJson());
         long seq = repository.nextSequence();
-        Order toSave = new Order(
+        return new Order(
                 UUID.randomUUID().toString(),
                 "PED-" + seq,
                 order.clientName(),
@@ -71,50 +95,225 @@ public class OrderService implements OrderUseCase {
                 items,
                 total,
                 RequestStatus.PENDING,
-                Instant.now()
+                Instant.now(),
+                source,
+                null, null, null, null,
+                BigDecimal.ZERO
         );
-        return repository.save(toSave);
     }
 
-    private boolean isPickupCheckout(String checkoutJson) {
-        if (checkoutJson == null || checkoutJson.isBlank()) {
-            return false;
+    /**
+     * Total igual al del checkout web: subtotal − 3% retiro, + IVA 15% si pide factura,
+     * + 6% si paga con tarjeta o PayPal.
+     */
+    BigDecimal computeTotal(List<OrderItem> items, String checkoutJson) {
+        BigDecimal subtotal = items.stream()
+                .map(i -> i.price().multiply(BigDecimal.valueOf(i.qty())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        JsonNode c = readJson(checkoutJson);
+        BigDecimal after = subtotal;
+        if (c != null && "pickup".equalsIgnoreCase(text(c, "fulfillmentMethod")) && subtotal.signum() > 0) {
+            after = subtotal.subtract(subtotal.multiply(PICKUP_DISCOUNT_RATE).setScale(2, RoundingMode.HALF_UP));
         }
-        try {
-            var tree = objectMapper.readTree(checkoutJson);
-            var method = tree.get("fulfillmentMethod");
-            return method != null && "pickup".equalsIgnoreCase(method.asText(""));
-        } catch (Exception e) {
-            return false;
+        BigDecimal iva = BigDecimal.ZERO;
+        if (c != null && c.has("requiresInvoice") && c.get("requiresInvoice").asBoolean(false)) {
+            iva = after.multiply(IVA_RATE).setScale(2, RoundingMode.HALF_UP);
         }
+        BigDecimal before = after.add(iva).setScale(2, RoundingMode.HALF_UP);
+        String pay = c == null ? "" : text(c, "paymentMethod");
+        BigDecimal surcharge = ("tarjeta".equalsIgnoreCase(pay) || "paypal".equalsIgnoreCase(pay))
+                ? before.multiply(CARD_SURCHARGE_RATE).setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        return before.add(surcharge).setScale(2, RoundingMode.HALF_UP);
     }
 
     @Override
-    public Order updateStatus(String id, RequestStatus status) {
-        Order existing = getById(id);
-        return repository.save(new Order(
-                existing.id(), existing.code(), existing.clientName(), existing.clientEmail(),
-                existing.clientPhone(), existing.notes(), existing.checkoutJson(), existing.items(),
-                existing.total(), status, existing.createdAt()));
+    @Transactional
+    public Order updateStatus(String id, RequestStatus status, Instant scheduledAt, BigDecimal deposit, String note,
+                              String actor) {
+        if (status == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado requerido");
+        }
+        Order o = getById(id);
+        Instant now = Instant.now();
+        Instant scheduled = o.scheduledAt();
+        Instant paidAt = o.paidAt();
+        Instant doneAt = o.doneAt();
+        String doneBy = o.doneBy();
+        BigDecimal paid = nz(o.paidAmount());
+        StringBuilder msg = new StringBuilder("Estado: ")
+                .append(label(o.status())).append(" → ").append(label(status));
+
+        switch (status) {
+            case PAID -> {
+                Instant when = scheduledAt != null ? scheduledAt : scheduled;
+                if (when == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Para pasar a Pagado indica la fecha y hora de entrega.");
+                }
+                if (scheduledAt != null && scheduled != null && !scheduledAt.equals(scheduled)) {
+                    msg.append(" · fecha cambiada de ").append(FMT.format(scheduled)).append(" a ")
+                            .append(FMT.format(scheduledAt));
+                } else {
+                    msg.append(" · agendado para ").append(FMT.format(when));
+                }
+                scheduled = when;
+                if (paidAt == null) {
+                    paidAt = now;
+                }
+                // Reabrir un pedido hecho lo devuelve al calendario.
+                doneAt = null;
+                doneBy = null;
+            }
+            case DONE, DELIVERED -> {
+                doneAt = now;
+                doneBy = actor;
+                BigDecimal saldo = o.total() == null ? BigDecimal.ZERO : nz(o.total()).subtract(paid);
+                if (saldo.signum() > 0) {
+                    msg.append(" · ⚠ saldo pendiente $").append(saldo.setScale(2, RoundingMode.HALF_UP));
+                }
+            }
+            default -> {
+                if (status == RequestStatus.PENDING || status == RequestStatus.CANCELED) {
+                    doneAt = null;
+                    doneBy = null;
+                }
+            }
+        }
+        if (note != null && !note.isBlank()) {
+            msg.append(" · ").append(note.trim());
+        }
+
+        if (deposit != null && deposit.signum() > 0) {
+            paid = paid.add(deposit).setScale(2, RoundingMode.HALF_UP);
+        }
+        Order saved = repository.save(o.withAgenda(status, scheduled, paidAt, doneAt, doneBy, paid));
+        log(id, actor, "STATUS", msg.toString(), null);
+        if (deposit != null && deposit.signum() > 0) {
+            log(id, actor, "PAYMENT", "Abono registrado · saldo $" + saved.balance().setScale(2, RoundingMode.HALF_UP),
+                    deposit.setScale(2, RoundingMode.HALF_UP));
+        }
+        return saved;
     }
 
     @Override
-    public void delete(String id) {
+    @Transactional
+    public Order reschedule(String id, Instant scheduledAt, String reason, String actor) {
+        if (scheduledAt == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica la nueva fecha y hora.");
+        }
+        Order o = getById(id);
+        if (o.status() == RequestStatus.CANCELED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El pedido está cancelado.");
+        }
+        String from = o.scheduledAt() == null ? "sin fecha" : FMT.format(o.scheduledAt());
+        Order saved = repository.save(o.withAgenda(o.status(), scheduledAt, o.paidAt(), o.doneAt(), o.doneBy(),
+                nz(o.paidAmount())));
+        String msg = "Aplazado: " + from + " → " + FMT.format(scheduledAt)
+                + (reason == null || reason.isBlank() ? "" : " · Motivo: " + reason.trim());
+        log(id, actor, "SCHEDULE", msg, null);
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public Order addPayment(String id, BigDecimal amount, String note, String actor) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El abono debe ser mayor a 0.");
+        }
+        Order o = getById(id);
+        BigDecimal paid = nz(o.paidAmount()).add(amount).setScale(2, RoundingMode.HALF_UP);
+        Order saved = repository.save(o.withAgenda(o.status(), o.scheduledAt(), o.paidAt(), o.doneAt(), o.doneBy(),
+                paid));
+        String msg = "Abono registrado · saldo $" + saved.balance().setScale(2, RoundingMode.HALF_UP)
+                + (note == null || note.isBlank() ? "" : " · " + note.trim());
+        log(id, actor, "PAYMENT", msg, amount.setScale(2, RoundingMode.HALF_UP));
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public OrderEvent addEvent(String id, String type, String message, String actor) {
         getById(id);
-        repository.deleteById(id);
+        String t = type == null ? "NOTE" : type.trim().toUpperCase(Locale.ROOT);
+        if (!t.equals("NOTE") && !t.equals("REMINDER")) {
+            t = "NOTE";
+        }
+        if (message == null || message.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe la nota.");
+        }
+        return toDomain(log(id, actor, t, message.trim(), null));
     }
 
     @Override
+    public List<OrderEvent> events(String id) {
+        return events.findByOrderIdOrderByCreatedAtAscIdAsc(id).stream().map(this::toDomain).toList();
+    }
+
+    @Override
+    @Transactional
     public Order attachPdfUrl(String code, String pdfUrl) {
         if (pdfUrl == null || pdfUrl.isBlank() || !pdfUrl.startsWith("https://")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pdfUrl inválida");
         }
         Order existing = getByCode(code);
         String merged = mergePdfUrl(existing.checkoutJson(), pdfUrl.trim());
-        return repository.save(new Order(
-                existing.id(), existing.code(), existing.clientName(), existing.clientEmail(),
-                existing.clientPhone(), existing.notes(), merged, existing.items(),
-                existing.total(), existing.status(), existing.createdAt()));
+        return repository.save(existing.withCheckoutJson(merged));
+    }
+
+    // ---------------- helpers ----------------
+
+    private OrderEventEntity log(String orderId, String actor, String type, String message, BigDecimal amount) {
+        OrderEventEntity e = new OrderEventEntity();
+        e.setOrderId(orderId);
+        e.setCreatedAt(Instant.now());
+        e.setActor(actor == null || actor.isBlank() ? "Sistema" : actor);
+        e.setType(type);
+        e.setMessage(message);
+        e.setAmount(amount);
+        return events.save(e);
+    }
+
+    private OrderEvent toDomain(OrderEventEntity e) {
+        return new OrderEvent(e.getId(), e.getOrderId(), e.getCreatedAt(), e.getActor(), e.getType(),
+                e.getMessage(), e.getAmount());
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
+    }
+
+    static String label(RequestStatus s) {
+        if (s == null) {
+            return "—";
+        }
+        return switch (s) {
+            case PENDING -> "Pendiente";
+            case SENT -> "Enviada";
+            case PRODUCTION -> "Producción";
+            case DELIVERED -> "Entregada";
+            case PAID -> "Pagado";
+            case DONE -> "Hecho";
+            case CANCELED -> "Cancelado";
+        };
+    }
+
+    private JsonNode readJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode n = objectMapper.readTree(json);
+            return n != null && n.isObject() ? n : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String text(JsonNode n, String field) {
+        JsonNode v = n.get(field);
+        return v == null || v.isNull() ? "" : v.asText("");
     }
 
     private String mergePdfUrl(String checkoutJson, String pdfUrl) {

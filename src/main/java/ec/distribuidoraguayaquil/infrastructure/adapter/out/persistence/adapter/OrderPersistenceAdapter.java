@@ -48,6 +48,12 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
         entity.setTotal(order.total());
         entity.setStatus(order.status());
         entity.setCreatedAt(order.createdAt());
+        entity.setSource(order.source() == null || order.source().isBlank() ? "web" : order.source());
+        entity.setScheduledAt(order.scheduledAt());
+        entity.setPaidAt(order.paidAt());
+        entity.setDoneAt(order.doneAt());
+        entity.setDoneBy(order.doneBy());
+        entity.setPaidAmount(order.paidAmount() == null ? java.math.BigDecimal.ZERO : order.paidAmount());
         entity.getItems().clear();
         if (order.items() != null) {
             for (OrderItem item : order.items()) {
@@ -67,11 +73,6 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
     }
 
     @Override
-    public void deleteById(String id) {
-        repository.deleteById(id);
-    }
-
-    @Override
     public long nextSequence() {
         // Usar el máximo PED-n existente (+1). count() colisionaba si había huecos
         // (p. ej. solo queda PED-1002 → count=1 → generaba PED-1002 de nuevo).
@@ -85,6 +86,8 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
                         i.getPrice(), i.getQty(), i.getImage()))
                 .toList();
         return new Order(e.getId(), e.getCode(), e.getClientName(), e.getClientEmail(), e.getClientPhone(),
-                e.getNotes(), e.getCheckoutJson(), items, e.getTotal(), e.getStatus(), e.getCreatedAt());
+                e.getNotes(), e.getCheckoutJson(), items, e.getTotal(), e.getStatus(), e.getCreatedAt(),
+                e.getSource() == null ? "web" : e.getSource(), e.getScheduledAt(), e.getPaidAt(), e.getDoneAt(),
+                e.getDoneBy(), e.getPaidAmount() == null ? java.math.BigDecimal.ZERO : e.getPaidAmount());
     }
 }

@@ -66,6 +66,15 @@ public class AuthService implements AuthUseCase {
         }
     }
 
+    @Override
+    public String usernameFromToken(String token) {
+        if (!validateToken(token)) {
+            return null;
+        }
+        String raw = new String(Base64.getUrlDecoder().decode(token), StandardCharsets.UTF_8);
+        return raw.split(":")[0];
+    }
+
     private String hmac(String payload) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

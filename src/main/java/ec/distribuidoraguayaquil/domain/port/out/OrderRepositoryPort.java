@@ -10,6 +10,5 @@ public interface OrderRepositoryPort {
     Optional<Order> findById(String id);
     Optional<Order> findByCode(String code);
     Order save(Order order);
-    void deleteById(String id);
     long nextSequence();
 }

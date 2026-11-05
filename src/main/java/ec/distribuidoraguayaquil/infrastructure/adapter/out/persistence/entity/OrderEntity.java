@@ -44,6 +44,18 @@ public class OrderEntity {
     private RequestStatus status;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+    @Column(nullable = false, length = 20)
+    private String source = "web";
+    @Column(name = "scheduled_at")
+    private Instant scheduledAt;
+    @Column(name = "paid_at")
+    private Instant paidAt;
+    @Column(name = "done_at")
+    private Instant doneAt;
+    @Column(name = "done_by", length = 80)
+    private String doneBy;
+    @Column(name = "paid_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal paidAmount = BigDecimal.ZERO;
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<OrderItemEntity> items = new ArrayList<>();
 
@@ -67,6 +79,18 @@ public class OrderEntity {
     public void setStatus(RequestStatus status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
+    public Instant getScheduledAt() { return scheduledAt; }
+    public void setScheduledAt(Instant scheduledAt) { this.scheduledAt = scheduledAt; }
+    public Instant getPaidAt() { return paidAt; }
+    public void setPaidAt(Instant paidAt) { this.paidAt = paidAt; }
+    public Instant getDoneAt() { return doneAt; }
+    public void setDoneAt(Instant doneAt) { this.doneAt = doneAt; }
+    public String getDoneBy() { return doneBy; }
+    public void setDoneBy(String doneBy) { this.doneBy = doneBy; }
+    public BigDecimal getPaidAmount() { return paidAmount; }
+    public void setPaidAmount(BigDecimal paidAmount) { this.paidAmount = paidAmount; }
     public List<OrderItemEntity> getItems() { return items; }
     public void setItems(List<OrderItemEntity> items) { this.items = items; }
 }
