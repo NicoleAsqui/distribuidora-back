@@ -16,6 +16,10 @@ public final class OrderAgendaRequests {
     public record Payment(@NotNull BigDecimal amount, String note) {
     }
 
+    public record Delivery(String fulfillmentMethod, String city, String address, String references, String mapsUrl,
+                           String note) {
+    }
+
     public record Event(String type, String message) {
     }
 

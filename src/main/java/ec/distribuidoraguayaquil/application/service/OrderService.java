@@ -407,6 +407,74 @@ public class OrderService implements OrderUseCase {
         return v == null || v.isNull() ? "" : v.asText("");
     }
 
+    @Override
+    @Transactional
+    public Order updateDelivery(String id, String fulfillmentMethod, String city, String address, String references,
+                                String mapsUrl, String note, String actor) {
+        String method = "delivery".equalsIgnoreCase(fulfillmentMethod) ? "delivery" : "pickup";
+        Order o = getById(id);
+        if (o.status() == RequestStatus.CANCELED || o.status() == RequestStatus.DONE
+                || o.status() == RequestStatus.DELIVERED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "No se puede cambiar la entrega de un pedido " + label(o.status()).toLowerCase(Locale.ROOT) + ".");
+        }
+        String c = city == null || city.isBlank() ? "Guayaquil" : city.trim();
+        if ("delivery".equals(method) && (address == null || address.isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe la dirección de envío.");
+        }
+        ObjectNode node;
+        try {
+            JsonNode tree = readJson(o.checkoutJson());
+            node = tree == null ? objectMapper.createObjectNode() : (ObjectNode) tree;
+        } catch (Exception e) {
+            node = objectMapper.createObjectNode();
+        }
+        String before = "delivery".equals(text(node, "fulfillmentMethod")) ? "Envío" : "Retiro en tienda";
+        String beforeAddr = text(node, "address");
+        node.put("fulfillmentMethod", method);
+        if ("delivery".equals(method)) {
+            node.put("deliveryZone", "Guayaquil".equalsIgnoreCase(c) ? "guayaquil" : "fuera");
+            node.put("city", c);
+            node.put("address", address.trim());
+            node.put("references", references == null ? "" : references.trim());
+            node.put("mapsUrl", mapsUrl == null ? "" : mapsUrl.trim());
+        } else {
+            node.put("deliveryZone", "guayaquil");
+            node.put("city", "Guayaquil");
+            node.put("address", "");
+            node.put("references", "");
+            node.put("mapsUrl", "");
+            node.putNull("lat");
+            node.putNull("lng");
+        }
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos de entrega inválidos");
+        }
+        // Pedidos de cotización conservan el total pactado; el resto se recalcula (descuento de retiro).
+        BigDecimal newTotal = "cotizacion".equals(o.source()) ? nz(o.total()) : computeTotal(o.items(), json);
+        Order saved = repository.save(o.withCheckoutAndTotal(json, newTotal));
+
+        String after = "delivery".equals(method) ? "Envío" : "Retiro en tienda";
+        StringBuilder msg = new StringBuilder("Entrega cambiada: ").append(before).append(" → ").append(after);
+        if ("delivery".equals(method)) {
+            msg.append(" (").append(address.trim()).append(", ").append(c).append(")");
+        } else if (!beforeAddr.isBlank()) {
+            msg.append(" (antes: ").append(beforeAddr).append(")");
+        }
+        if (nz(o.total()).compareTo(newTotal) != 0) {
+            msg.append(" · total $").append(nz(o.total()).setScale(2, RoundingMode.HALF_UP))
+                    .append(" → $").append(newTotal.setScale(2, RoundingMode.HALF_UP));
+        }
+        if (note != null && !note.isBlank()) {
+            msg.append(" · ").append(note.trim());
+        }
+        log(id, actor, "NOTE", msg.toString(), null);
+        return saved;
+    }
+
     private String mergePdfUrl(String checkoutJson, String pdfUrl) {
         try {
             ObjectNode node;

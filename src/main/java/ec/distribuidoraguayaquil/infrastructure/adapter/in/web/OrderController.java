@@ -83,6 +83,14 @@ public class OrderController {
         return orderUseCase.reschedule(id, request.scheduledAt(), request.reason(), actor(http));
     }
 
+    /** Admin: el cliente cambió de retiro a envío (o al revés) / nueva dirección. */
+    @PutMapping("/{id}/delivery")
+    public Order updateDelivery(@PathVariable String id, @RequestBody OrderAgendaRequests.Delivery request,
+                                HttpServletRequest http) {
+        return orderUseCase.updateDelivery(id, request.fulfillmentMethod(), request.city(), request.address(),
+                request.references(), request.mapsUrl(), request.note(), actor(http));
+    }
+
     @PostMapping("/{id}/payments")
     public Order addPayment(@PathVariable String id, @Valid @RequestBody OrderAgendaRequests.Payment request,
                             HttpServletRequest http) {

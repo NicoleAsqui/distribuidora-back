@@ -143,6 +143,23 @@ class OrderServiceAgendaTest {
     }
 
     @Test
+    void cambiarEntregaRecalculaTotalYQuedaEnHistorial() {
+        Order o = service.create(newOrder("{\"fulfillmentMethod\":\"pickup\"}"));
+        assertEquals(new BigDecimal("97.00"), o.total());
+        // Retiro → envío: se pierde el 3%.
+        Order envio = service.updateDelivery(o.id(), "delivery", "Guayaquil", "Av. 9 de Octubre 100", "esquina", "", null, "Jeymy");
+        assertEquals(new BigDecimal("100.00"), envio.total());
+        assertTrue(envio.checkoutJson().contains("Av. 9 de Octubre 100"));
+        // Envío sin dirección no se permite.
+        assertThrows(ResponseStatusException.class,
+                () -> service.updateDelivery(o.id(), "delivery", "Guayaquil", " ", null, null, null, "Jeymy"));
+        // De vuelta a retiro.
+        Order retiro = service.updateDelivery(o.id(), "pickup", null, null, null, null, "el cliente prefiere retirar", "Jeymy");
+        assertEquals(new BigDecimal("97.00"), retiro.total());
+        assertTrue(service.events(o.id()).stream().anyMatch(e -> e.message().startsWith("Entrega cambiada: Retiro en tienda → Envío")));
+    }
+
+    @Test
     void pendienteVigenteNoCaduca() {
         Order o = service.createManual(newOrder(null), "Jeymy");
         assertEquals(RequestStatus.PENDING, service.getById(o.id()).status());

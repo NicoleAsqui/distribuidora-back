@@ -48,6 +48,11 @@ public record Order(
                 createdAt, source, scheduledAt, paidAt, doneAt, doneBy, paidAmount);
     }
 
+    public Order withCheckoutAndTotal(String json, BigDecimal newTotal) {
+        return new Order(id, code, clientName, clientEmail, clientPhone, notes, json, items, newTotal, status,
+                createdAt, source, scheduledAt, paidAt, doneAt, doneBy, paidAmount);
+    }
+
     public Order withStatus(RequestStatus s) {
         return new Order(id, code, clientName, clientEmail, clientPhone, notes, checkoutJson, items, total, s,
                 createdAt, source, scheduledAt, paidAt, doneAt, doneBy, paidAmount);

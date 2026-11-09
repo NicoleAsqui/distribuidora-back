@@ -42,4 +42,11 @@ public interface OrderUseCase {
 
     /** Adjunta URL del PDF (GCS) al checkoutJson del pedido público. */
     Order attachPdfUrl(String code, String pdfUrl);
+
+    /**
+     * Cambia la forma de entrega (retiro ↔ envío) y la dirección. Recalcula el total
+     * (retiro tiene 3% de descuento) salvo en pedidos que vienen de cotización (total pactado).
+     */
+    Order updateDelivery(String id, String fulfillmentMethod, String city, String address, String references,
+                         String mapsUrl, String note, String actor);
 }
