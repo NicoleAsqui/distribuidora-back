@@ -86,6 +86,9 @@ class OrderServiceAgendaTest {
         assertEquals("manual", o.source());
         assertThrows(ResponseStatusException.class,
                 () -> service.updateStatus(o.id(), RequestStatus.PAID, null, null, null, "Jeymy"));
+        // Sin pago no puede pasar a Pagado.
+        assertThrows(ResponseStatusException.class,
+                () -> service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), null, null, "Jeymy"));
 
         Instant when = Instant.parse("2026-11-12T17:00:00Z");
         Order paid = service.updateStatus(o.id(), RequestStatus.PAID, when, new BigDecimal("40"), null, "Jeymy");
@@ -120,6 +123,32 @@ class OrderServiceAgendaTest {
     }
 
     @Test
+    void pendienteSinPagoCaducaALaSemana() {
+        Order o = service.createManual(newOrder(null), "Jeymy");
+        // Simula que se creó hace 8 días.
+        Order viejo = store.get(o.id());
+        store.put(o.id(), new Order(viejo.id(), viejo.code(), viejo.clientName(), viejo.clientEmail(), viejo.clientPhone(),
+                viejo.notes(), viejo.checkoutJson(), viejo.items(), viejo.total(), viejo.status(),
+                Instant.now().minus(java.time.Duration.ofDays(8)), viejo.source(), null, null, null, null, BigDecimal.ZERO));
+        assertEquals(RequestStatus.EXPIRED, service.getById(o.id()).status());
+        assertTrue(service.events(o.id()).stream().anyMatch(e -> e.actor().equals("Sistema") && e.message().contains("Caducado")));
+        Instant when = Instant.parse("2026-11-20T17:00:00Z");
+        // Caducado: no vuelve a Pendiente y pagar exige nota.
+        assertThrows(ResponseStatusException.class,
+                () -> service.updateStatus(o.id(), RequestStatus.PENDING, null, null, null, "Jeymy"));
+        assertThrows(ResponseStatusException.class,
+                () -> service.updateStatus(o.id(), RequestStatus.PAID, when, new BigDecimal("50"), null, "Jeymy"));
+        Order paid = service.updateStatus(o.id(), RequestStatus.PAID, when, new BigDecimal("50"), "cliente pagó tarde, se respeta", "Jeymy");
+        assertEquals(RequestStatus.PAID, paid.status());
+    }
+
+    @Test
+    void pendienteVigenteNoCaduca() {
+        Order o = service.createManual(newOrder(null), "Jeymy");
+        assertEquals(RequestStatus.PENDING, service.getById(o.id()).status());
+    }
+
+    @Test
     void volverAPendienteAnulaAbonosYFecha() {
         Order o = service.createManual(newOrder(null), "Jeymy");
         service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), new BigDecimal("30"), null, "Jeymy");
@@ -132,19 +161,19 @@ class OrderServiceAgendaTest {
     @Test
     void abonoNoSuperaSaldo() {
         Order o = service.createManual(newOrder(null), "Jeymy");
-        service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), null, null, "Jeymy");
+        service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), new BigDecimal("10"), null, "Jeymy");
         assertThrows(ResponseStatusException.class, () -> service.addPayment(o.id(), new BigDecimal("150"), null, "x"));
         Order p1 = service.addPayment(o.id(), new BigDecimal("30"), null, "Miguel");
-        assertEquals(new BigDecimal("70.00"), p1.balance());
-        Order p2 = service.addPayment(o.id(), new BigDecimal("70"), null, "Miguel");
+        assertEquals(new BigDecimal("60.00"), p1.balance());
+        Order p2 = service.addPayment(o.id(), new BigDecimal("60"), null, "Miguel");
         assertEquals(0, p2.balance().signum());
     }
 
     @Test
     void abonoCompletaSaldo() {
         Order o = service.createManual(newOrder(null), "Jeymy");
-        service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), null, null, "Jeymy");
-        Order p = service.addPayment(o.id(), new BigDecimal("100"), "transferencia", "Jeymy");
+        service.updateStatus(o.id(), RequestStatus.PAID, Instant.parse("2026-11-12T17:00:00Z"), new BigDecimal("10"), null, "Jeymy");
+        Order p = service.addPayment(o.id(), new BigDecimal("90"), "transferencia", "Jeymy");
         assertEquals(0, p.balance().signum());
         assertThrows(ResponseStatusException.class, () -> service.addPayment(o.id(), BigDecimal.ZERO, null, "x"));
     }

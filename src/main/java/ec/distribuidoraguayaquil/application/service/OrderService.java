@@ -47,21 +47,42 @@ public class OrderService implements OrderUseCase {
         this.objectMapper = objectMapper;
     }
 
+    /** Un pedido pendiente vale 1 semana: si no se paga, caduca (igual que las cotizaciones). */
+    public static final java.time.Duration VALIDITY = java.time.Duration.ofDays(7);
+
+    public static Instant validUntil(Order o) {
+        return (o.createdAt() == null ? Instant.now() : o.createdAt()).plus(VALIDITY);
+    }
+
+    /** Pendiente vencido → Caducado (se guarda y queda en el historial). */
+    private Order expireIfNeeded(Order o) {
+        if (o.status() == RequestStatus.PENDING && Instant.now().isAfter(validUntil(o))) {
+            Order saved = repository.save(o.withStatus(RequestStatus.EXPIRED));
+            log(o.id(), "Sistema", "STATUS",
+                    "Estado: Pendiente → Caducado · no se registró el pago antes del " + FMT.format(validUntil(o)), null);
+            return saved;
+        }
+        return o;
+    }
+
     @Override
+    @Transactional
     public List<Order> listAll() {
-        return repository.findAll();
+        return repository.findAll().stream().map(this::expireIfNeeded).toList();
     }
 
     @Override
+    @Transactional
     public Order getById(String id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        return expireIfNeeded(repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado")));
     }
 
     @Override
+    @Transactional
     public Order getByCode(String code) {
-        return repository.findByCode(code)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+        return expireIfNeeded(repository.findByCode(code)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado")));
     }
 
     @Override
@@ -171,12 +192,30 @@ public class OrderService implements OrderUseCase {
         StringBuilder msg = new StringBuilder("Estado: ")
                 .append(label(o.status())).append(" → ").append(label(status));
 
+        if (o.status() == RequestStatus.EXPIRED) {
+            if (status == RequestStatus.PENDING) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Un pedido caducado no vuelve a Pendiente: regístralo como Pagado (con nota) o cancélalo.");
+            }
+            if (status == RequestStatus.PAID) {
+                if (note == null || note.isBlank()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "El pedido está caducado: escribe una nota explicando por qué se acepta el pago.");
+                }
+                msg.append(" · pagado fuera de plazo (caducado)");
+            }
+        }
+
         switch (status) {
             case PAID -> {
                 Instant when = scheduledAt != null ? scheduledAt : scheduled;
                 if (when == null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Para pasar a Pagado indica la fecha y hora de entrega.");
+                }
+                if (paid.signum() <= 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Para pasar a Pagado registra el pago: el abono o el valor completo.");
                 }
                 if (scheduledAt != null && scheduled != null && !scheduledAt.equals(scheduled)) {
                     msg.append(" · fecha cambiada de ").append(FMT.format(scheduled)).append(" a ")
@@ -346,6 +385,7 @@ public class OrderService implements OrderUseCase {
             case DELIVERED -> "Entregada";
             case PAID -> "Pagado";
             case DONE -> "Hecho";
+            case EXPIRED -> "Caducado";
             case CANCELED -> "Cancelado";
         };
     }

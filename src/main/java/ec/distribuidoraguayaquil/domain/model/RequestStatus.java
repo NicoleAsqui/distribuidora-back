@@ -9,5 +9,7 @@ public enum RequestStatus {
     PAID,
     /** Hecho / entregado (pedidos de la agenda). */
     DONE,
+    /** Caducado: pedido pendiente que no se pagó dentro de la validez (1 semana). */
+    EXPIRED,
     CANCELED
 }

@@ -64,13 +64,19 @@ public class PricingQuoteController {
     @PostMapping("/{id}/to-order")
     public Order toOrder(@PathVariable String id, @RequestBody(required = false) Map<String, Object> body,
                          HttpServletRequest http) {
-        PricingQuoteEntity q = repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        PricingQuoteEntity q = expireIfNeeded(repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND)));
         if (q.getOrderCode() != null && !q.getOrderCode().isBlank()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Esta cotización ya es el pedido " + q.getOrderCode() + ".");
         }
         Map<String, Object> extra = body == null ? Map.of() : body;
+        String exceptionNote = asString(extra.get("note")).trim();
+        boolean wasExpired = STATUS_EXPIRED.equals(q.getStatus());
+        if (wasExpired && exceptionNote.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cotización está caducada: escribe una nota explicando por qué se acepta.");
+        }
         List<OrderItem> items = quoteItems(q);
         if (items.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cotización no tiene productos.");
@@ -101,11 +107,17 @@ public class PricingQuoteController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos inválidos");
         }
         String notes = "Desde cotización " + q.getCode()
+                + (wasExpired ? "\nAceptada fuera de plazo (caducada): " + exceptionNote : "")
                 + (q.getNotes() == null || q.getNotes().isBlank() ? "" : "\n" + q.getNotes().trim());
         Order draft = new Order(null, null,
                 asString(q.getClientName()).isBlank() ? "Cliente" : q.getClientName(),
                 q.getClientEmail(), q.getClientPhone(), notes, checkoutJson, items, null, null, null);
-        Order order = orderUseCase.createFromQuote(draft, q.getTotal(), actor(http), q.getCode());
+        String who = actor(http);
+        Order order = orderUseCase.createFromQuote(draft, q.getTotal(), who, q.getCode());
+        if (wasExpired) {
+            orderUseCase.addEvent(order.id(), "NOTE", "Cotización caducada aceptada como excepción: " + exceptionNote, who);
+            appendQuoteNote(q, "Aceptada fuera de plazo por " + who + ": " + exceptionNote);
+        }
         q.setOrderCode(order.code());
         q.setStatus("accepted");
         repository.save(q);
@@ -180,12 +192,12 @@ public class PricingQuoteController {
 
     @GetMapping
     public List<Map<String, Object>> list() {
-        return repository.findAllOrderedByCreatedAtDesc().stream().map(this::toMap).toList();
+        return repository.findAllOrderedByCreatedAtDesc().stream().map(this::expireIfNeeded).map(this::toMap).toList();
     }
 
     @GetMapping("/{id}")
     public Map<String, Object> get(@PathVariable String id) {
-        return repository.findById(id).map(this::toMap)
+        return repository.findById(id).map(this::expireIfNeeded).map(this::toMap)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
@@ -277,12 +289,52 @@ public class PricingQuoteController {
         return UUID.randomUUID().toString();
     }
 
+    /**
+     * Cambia el estado. De Caducada a Aceptada exige una nota (es una excepción y queda registrada).
+     */
     @PutMapping("/{id}/status")
-    public Map<String, Object> updateStatus(@PathVariable String id, @RequestBody Map<String, String> body) {
-        PricingQuoteEntity e = repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        e.setStatus(body.getOrDefault("status", e.getStatus()));
+    public Map<String, Object> updateStatus(@PathVariable String id, @RequestBody Map<String, String> body,
+                                            HttpServletRequest http) {
+        PricingQuoteEntity e = expireIfNeeded(repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND)));
+        String next = body.getOrDefault("status", e.getStatus());
+        String note = body.getOrDefault("note", "") == null ? "" : body.getOrDefault("note", "").trim();
+        if (STATUS_EXPIRED.equals(e.getStatus()) && "accepted".equals(next)) {
+            if (note.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "La cotización está caducada: escribe una nota explicando por qué se acepta.");
+            }
+            appendQuoteNote(e, "Aceptada fuera de plazo por " + actor(http) + ": " + note);
+        }
+        e.setStatus(next);
         return toMap(repository.save(e));
+    }
+
+    // ---------------- Caducidad ----------------
+
+    static final String STATUS_EXPIRED = "expired";
+    /** Igual que la validez impresa en el PDF (1 semana). */
+    static final java.time.Duration VALIDITY = java.time.Duration.ofDays(7);
+
+    static Instant validUntil(PricingQuoteEntity e) {
+        Instant created = e.getCreatedAt() == null ? Instant.now() : e.getCreatedAt();
+        return created.plus(VALIDITY);
+    }
+
+    /** Si estaba Enviada y ya venció, pasa a Caducada (se guarda). */
+    private PricingQuoteEntity expireIfNeeded(PricingQuoteEntity e) {
+        if ("sent".equals(e.getStatus()) && Instant.now().isAfter(validUntil(e))
+                && (e.getOrderCode() == null || e.getOrderCode().isBlank())) {
+            e.setStatus(STATUS_EXPIRED);
+            return repository.save(e);
+        }
+        return e;
+    }
+
+    private static void appendQuoteNote(PricingQuoteEntity q, String line) {
+        String base = q.getNotes() == null ? "" : q.getNotes().trim();
+        String merged = base.isEmpty() ? line : base + "\n" + line;
+        q.setNotes(merged.length() > 3900 ? merged.substring(merged.length() - 3900) : merged);
     }
 
     @DeleteMapping("/{id}")
@@ -376,6 +428,7 @@ public class PricingQuoteController {
         map.put("kind", e.getKind() == null || e.getKind().isBlank() ? "motor" : e.getKind());
         map.put("requiresInvoice", Boolean.TRUE.equals(e.getRequiresInvoice()));
         map.put("orderCode", e.getOrderCode());
+        map.put("validUntil", validUntil(e).toString());
         BigDecimal total = e.getTotal() == null ? BigDecimal.ZERO : e.getTotal();
         BigDecimal subtotal = e.getSubtotal() == null ? total : e.getSubtotal();
         BigDecimal iva = e.getIva() == null ? BigDecimal.ZERO : e.getIva();
