@@ -208,9 +208,14 @@ public class QuoteAdminMailService {
                       </td></tr>
                       <tr><td style="padding:20px 28px 0;">
                         <div style="background:#fff8e1;border-left:4px solid #f5b400;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;color:#5b4a00;">
-                          <strong>Tiempo de elaboración y entrega:</strong> pedidos pequeños, de 3 a 7 días hábiles;
-                          pedidos grandes, de 1 a 2 semanas (no se cuentan fines de semana ni feriados).
-                          ¿Lo necesitas con urgencia? Conversa con un asesor.
+                          <strong>Tiempo de elaboración y entrega:</strong> pedidos pequeños, de 5 a 7 días hábiles;
+                          pedidos grandes, de 1 a 2 semanas (no se consideran fines de semana ni feriados).
+                        </div>
+                        <div style="margin-top:10px;background:#fff1f1;border-left:4px solid #e5484d;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;color:#a51d22;">
+                          <strong>Consideraciones:</strong> si requiere su pedido con urgencia, comuníquese con uno de nuestros
+                          asesores, quien evaluará su caso. Le recomendamos programar sus pedidos con anticipación, idealmente
+                          con 7 días hábiles, ya que así garantizamos el mejor resultado. Los pedidos urgentes se atienden como
+                          excepción, sujetos a la demanda y a la disponibilidad de producción.
                         </div>
                       </td></tr>
                       <tr><td align="center" style="padding:26px 28px 8px;">
@@ -285,10 +290,11 @@ public class QuoteAdminMailService {
                                 .append(esc(notes)).append("</span>");
                     }
                     itemsHtml.append("</td>")
-                            .append("<td style='padding:10px;border:1px solid #e2e8f0;text-align:right;'>$")
-                            .append(money(unit)).append("</td>")
-                            .append("<td style='padding:10px;border:1px solid #e2e8f0;text-align:right;'><strong>$")
-                            .append(money(line)).append("</strong></td>")
+                            .append("<td style='padding:10px;border:1px solid #e2e8f0;text-align:right;'>")
+                            .append(unit.signum() == 0 ? "<em style='color:#b45309'>Por cotizar</em>" : "$" + money(unit))
+                            .append("</td>")
+                            .append("<td style='padding:10px;border:1px solid #e2e8f0;text-align:right;'><strong>")
+                            .append(line.signum() == 0 ? "—" : "$" + money(line)).append("</strong></td>")
                             .append("</tr>");
                 }
             }
@@ -318,7 +324,7 @@ public class QuoteAdminMailService {
                     </thead>
                     <tbody>%s</tbody>
                   </table>
-                  <p style="margin:18px 0 0;font-size:18px;">Total estimado: <strong>$%s USD</strong></p>
+                  <p style="margin:18px 0 0;font-size:18px;">%s</p>
                   %s
                   <p style="margin:12px 0 0;color:#64748b;font-size:13px;">También puedes revisar en Admin → Cotizaciones.</p>
                 </div>
@@ -330,7 +336,9 @@ public class QuoteAdminMailService {
                 esc(safe(quote.getDeliveryDate()).isBlank() ? "-" : quote.getDeliveryDate()),
                 esc(safe(quote.getNotes()).isBlank() ? "-" : quote.getNotes()),
                 itemsHtml,
-                money(quote.getTotal() == null ? BigDecimal.ZERO : quote.getTotal()),
+                quote.getTotal() == null || quote.getTotal().signum() == 0
+                        ? "<strong style=\"color:#b45309\">Solicitud sin precios: ponlos en Admin → Cotizaciones → Poner precios.</strong>"
+                        : "Total estimado: <strong>$" + money(quote.getTotal()) + " USD</strong>",
                 editButtonHtml(quote)
         );
     }

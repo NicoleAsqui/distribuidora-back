@@ -48,6 +48,7 @@ public class CatalogSchemaMigrationRunner implements ApplicationRunner {
         runScript("022_textura_tipo.sql");
         runScript("023_order_agenda.sql");
         runScript("024_quote_order_link.sql");
+        runScript("025_quote_sent_at.sql");
     }
 
     private void runScript(String name) {

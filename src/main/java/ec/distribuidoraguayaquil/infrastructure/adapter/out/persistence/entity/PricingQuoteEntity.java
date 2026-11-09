@@ -106,6 +106,12 @@ public class PricingQuoteEntity {
     @Column(name = "order_code", length = 40)
     private String orderCode;
 
+    /** Cuándo se envió al cliente con precios (inicio de la validez). */
+    @Column(name = "sent_at")
+    private Instant sentAt;
+
+    public Instant getSentAt() { return sentAt; }
+    public void setSentAt(Instant sentAt) { this.sentAt = sentAt; }
     public String getOrderCode() { return orderCode; }
     public void setOrderCode(String orderCode) { this.orderCode = orderCode; }
     public String getEditToken() { return editToken; }

@@ -205,6 +205,9 @@ public class PricingQuoteController {
     public Map<String, Object> create(@RequestBody Map<String, Object> body) {
         PricingQuoteEntity e = fromBody(body, true);
         e.setEditToken(UUID.randomUUID().toString());
+        if ("sent".equals(e.getStatus())) {
+            e.setSentAt(Instant.now());
+        }
         PricingQuoteEntity saved = repository.save(e);
         quoteAdminMailService.notifyAdminNewWebQuote(saved);
         Map<String, Object> map = toMap(saved);
@@ -236,6 +239,10 @@ public class PricingQuoteController {
         PricingQuoteEntity e = fromBody(body, false);
         e.setEditToken(ensureEditToken(existing));
         e.setOrderCode(existing.getOrderCode());
+        e.setSentAt(existing.getSentAt());
+        if ("sent".equals(e.getStatus()) && !"sent".equals(existing.getStatus())) {
+            e.setSentAt(Instant.now());
+        }
         return toMap(repository.save(e));
     }
 
@@ -262,6 +269,15 @@ public class PricingQuoteController {
         Object total = body.get("total");
         if (total != null) {
             existing.setTotal(new BigDecimal(String.valueOf(total)));
+        }
+        if (body.containsKey("requiresInvoice")) {
+            existing.setRequiresInvoice(asBoolean(body.get("requiresInvoice")));
+        }
+        if (body.get("subtotal") != null) {
+            existing.setSubtotal(new BigDecimal(String.valueOf(body.get("subtotal"))));
+        }
+        if (body.get("iva") != null) {
+            existing.setIva(new BigDecimal(String.valueOf(body.get("iva"))));
         }
         if (body.containsKey("notes")) {
             existing.setNotes(asString(body.get("notes")));
@@ -306,6 +322,9 @@ public class PricingQuoteController {
             }
             appendQuoteNote(e, "Aceptada fuera de plazo por " + actor(http) + ": " + note);
         }
+        if ("sent".equals(next) && !"sent".equals(e.getStatus())) {
+            e.setSentAt(Instant.now());
+        }
         e.setStatus(next);
         return toMap(repository.save(e));
     }
@@ -316,9 +335,11 @@ public class PricingQuoteController {
     /** Igual que la validez impresa en el PDF (1 semana). */
     static final java.time.Duration VALIDITY = java.time.Duration.ofDays(7);
 
+    /** La validez cuenta desde que se envió con precios (o desde la creación en cotizaciones antiguas). */
     static Instant validUntil(PricingQuoteEntity e) {
-        Instant created = e.getCreatedAt() == null ? Instant.now() : e.getCreatedAt();
-        return created.plus(VALIDITY);
+        Instant from = e.getSentAt() != null ? e.getSentAt()
+                : e.getCreatedAt() == null ? Instant.now() : e.getCreatedAt();
+        return from.plus(VALIDITY);
     }
 
     /** Si estaba Enviada y ya venció, pasa a Caducada (se guarda). */
@@ -429,6 +450,7 @@ public class PricingQuoteController {
         map.put("requiresInvoice", Boolean.TRUE.equals(e.getRequiresInvoice()));
         map.put("orderCode", e.getOrderCode());
         map.put("validUntil", validUntil(e).toString());
+        map.put("sentAt", e.getSentAt() == null ? null : e.getSentAt().toString());
         BigDecimal total = e.getTotal() == null ? BigDecimal.ZERO : e.getTotal();
         BigDecimal subtotal = e.getSubtotal() == null ? total : e.getSubtotal();
         BigDecimal iva = e.getIva() == null ? BigDecimal.ZERO : e.getIva();
