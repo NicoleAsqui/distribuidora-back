@@ -41,10 +41,66 @@ public class OrderService implements OrderUseCase {
     private final OrderEventJpaRepository events;
     private final ObjectMapper objectMapper;
 
-    public OrderService(OrderRepositoryPort repository, OrderEventJpaRepository events, ObjectMapper objectMapper) {
+    private final ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository variantes;
+    private final ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository disenos;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public OrderService(OrderRepositoryPort repository, OrderEventJpaRepository events, ObjectMapper objectMapper,
+                        ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.VarianteRepository variantes,
+                        ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.catalog.DisenoRepository disenos) {
         this.repository = repository;
         this.events = events;
         this.objectMapper = objectMapper;
+        this.variantes = variantes;
+        this.disenos = disenos;
+    }
+
+    /** Sin catálogo (pruebas): la sección no se completa. */
+    public OrderService(OrderRepositoryPort repository, OrderEventJpaRepository events, ObjectMapper objectMapper) {
+        this(repository, events, objectMapper, null, null);
+    }
+
+    /**
+     * Completa la sección de cada producto que no la tenga (pedidos antiguos), buscándola en el catálogo:
+     * REF (SKU) → variante → diseño → sección. No modifica la base de datos.
+     */
+    private Order withSecciones(Order o, java.util.Map<String, String> cache) {
+        if (variantes == null || disenos == null || o.items() == null
+                || o.items().stream().allMatch(i -> i.seccion() != null && !i.seccion().isBlank())) {
+            return o;
+        }
+        List<OrderItem> items = o.items().stream().map(i -> {
+            if (i.seccion() != null && !i.seccion().isBlank()) {
+                return i;
+            }
+            String sec = seccionForRef(i.productRef(), cache);
+            return sec == null ? i
+                    : new OrderItem(i.productRef(), i.name(), i.size(), i.color(), i.price(), i.qty(), i.image(), sec);
+        }).toList();
+        return new Order(o.id(), o.code(), o.clientName(), o.clientEmail(), o.clientPhone(), o.notes(),
+                o.checkoutJson(), items, o.total(), o.status(), o.createdAt(), o.source(), o.scheduledAt(),
+                o.paidAt(), o.doneAt(), o.doneBy(), o.paidAmount());
+    }
+
+    private String seccionForRef(String ref, java.util.Map<String, String> cache) {
+        if (ref == null || ref.isBlank()) {
+            return null;
+        }
+        if (cache.containsKey(ref)) {
+            return cache.get(ref);
+        }
+        String sec = null;
+        try {
+            sec = variantes.findBySku(ref.trim())
+                    .flatMap(v -> disenos.findById(v.getDisenoId()))
+                    .map(d -> d.getSeccion())
+                    .filter(x -> x != null && !x.isBlank())
+                    .orElse(null);
+        } catch (Exception ignored) {
+            sec = null;
+        }
+        cache.put(ref, sec);
+        return sec;
     }
 
     /** Un pedido pendiente vale 1 semana: si no se paga, caduca (igual que las cotizaciones). */
@@ -68,21 +124,24 @@ public class OrderService implements OrderUseCase {
     @Override
     @Transactional
     public List<Order> listAll() {
-        return repository.findAll().stream().map(this::expireIfNeeded).toList();
+        java.util.Map<String, String> cache = new java.util.HashMap<>();
+        return repository.findAll().stream().map(this::expireIfNeeded).map(o -> withSecciones(o, cache)).toList();
     }
 
     @Override
     @Transactional
     public Order getById(String id) {
-        return expireIfNeeded(repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado")));
+        return withSecciones(expireIfNeeded(repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"))),
+                new java.util.HashMap<>());
     }
 
     @Override
     @Transactional
     public Order getByCode(String code) {
-        return expireIfNeeded(repository.findByCode(code)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado")));
+        return withSecciones(expireIfNeeded(repository.findByCode(code)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"))),
+                new java.util.HashMap<>());
     }
 
     @Override
@@ -117,7 +176,15 @@ public class OrderService implements OrderUseCase {
     }
 
     private Order newOrder(Order order, String source) {
-        List<OrderItem> items = order.items() == null ? List.of() : order.items();
+        java.util.Map<String, String> cache = new java.util.HashMap<>();
+        List<OrderItem> items = (order.items() == null ? List.<OrderItem>of() : order.items()).stream()
+                .map(i -> {
+                    if (i.seccion() != null && !i.seccion().isBlank()) return i;
+                    String sec = variantes == null ? null : seccionForRef(i.productRef(), cache);
+                    return sec == null ? i
+                            : new OrderItem(i.productRef(), i.name(), i.size(), i.color(), i.price(), i.qty(), i.image(), sec);
+                })
+                .toList();
         BigDecimal total = computeTotal(items, order.checkoutJson());
         long seq = repository.nextSequence();
         return new Order(
