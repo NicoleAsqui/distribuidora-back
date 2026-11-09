@@ -217,6 +217,10 @@ public class QuoteAdminMailService {
                           con 7 días hábiles, ya que así garantizamos el mejor resultado. Los pedidos urgentes se atienden como
                           excepción, sujetos a la demanda y a la disponibilidad de producción.
                         </div>
+                        <div style="margin-top:10px;background:#f8fafc;border-left:4px solid #94a3b8;border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.5;color:#475569;">
+                          📦 Las cajas se entregan <strong>sin armar</strong>. Si las desea armadas, tienen un costo adicional
+                          de <strong>$0.05 por caja</strong>; existen algunas excepciones, consulte con su asesor.
+                        </div>
                       </td></tr>
                       <tr><td align="center" style="padding:26px 28px 8px;">
                         <a href="%7$s" target="_blank"
