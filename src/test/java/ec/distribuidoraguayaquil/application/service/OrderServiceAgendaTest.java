@@ -160,6 +160,19 @@ class OrderServiceAgendaTest {
     }
 
     @Test
+    void datosDeGuiaSeGuardanYValidanCedula() {
+        Order o = service.createManual(newOrder("{\"fullName\":\"Ana\"}"), "Jeymy");
+        assertThrows(ResponseStatusException.class,
+                () -> service.updateShipping(o.id(), null, null, "123", null, null, null, null, "Jeymy"));
+        Order g = service.updateShipping(o.id(), "Ana María", "Pérez Ruiz", "0912345678", 3, "Guayas", null, null, "Jeymy");
+        assertTrue(g.checkoutJson().contains("\"cedula\":\"0912345678\""));
+        assertTrue(g.checkoutJson().contains("\"packages\":3"));
+        assertEquals("Ana María Pérez Ruiz", g.clientName());
+        assertTrue(service.hasCedula(g));
+        assertTrue(service.events(o.id()).stream().anyMatch(e -> e.message().startsWith("Datos de guía:")));
+    }
+
+    @Test
     void pendienteVigenteNoCaduca() {
         Order o = service.createManual(newOrder(null), "Jeymy");
         assertEquals(RequestStatus.PENDING, service.getById(o.id()).status());

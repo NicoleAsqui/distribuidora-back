@@ -16,6 +16,11 @@ public final class OrderAgendaRequests {
     public record Payment(@NotNull BigDecimal amount, String note) {
     }
 
+    /** Datos de la guía de envío (todos opcionales; solo se cambia lo que venga). */
+    public record Shipping(String firstName, String lastName, String cedula, Integer packages, String province,
+                           String city, String note) {
+    }
+
     public record Delivery(String fulfillmentMethod, String city, String address, String references, String mapsUrl,
                            String note) {
     }

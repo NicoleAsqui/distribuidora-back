@@ -409,6 +409,70 @@ public class OrderService implements OrderUseCase {
 
     @Override
     @Transactional
+    public Order updateShipping(String id, String firstName, String lastName, String cedula, Integer packages,
+                                String province, String city, String note, String actor) {
+        Order o = getById(id);
+        ObjectNode node;
+        JsonNode tree = readJson(o.checkoutJson());
+        node = tree == null ? objectMapper.createObjectNode() : (ObjectNode) tree;
+        List<String> changes = new java.util.ArrayList<>();
+        if (cedula != null && !cedula.isBlank()) {
+            String c = cedula.replaceAll("\\D", "");
+            if (!c.matches("\\d{10}|\\d{13}")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cédula debe tener 10 dígitos (o RUC de 13).");
+            }
+            if (!c.equals(text(node, "cedula"))) changes.add("cédula " + c);
+            node.put("cedula", c);
+        }
+        if (packages != null) {
+            if (packages < 1 || packages > 999) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número de paquetes inválido.");
+            }
+            if (!String.valueOf(packages).equals(text(node, "packages"))) changes.add(packages + " paquete" + (packages == 1 ? "" : "s"));
+            node.put("packages", packages);
+        }
+        if (firstName != null && !firstName.isBlank()) node.put("firstName", firstName.trim());
+        if (lastName != null && !lastName.isBlank()) node.put("lastName", lastName.trim());
+        if ((firstName != null && !firstName.isBlank()) || (lastName != null && !lastName.isBlank())) {
+            String full = (text(node, "firstName") + " " + text(node, "lastName")).trim();
+            node.put("fullName", full);
+            changes.add("recibe " + full);
+        }
+        if (province != null && !province.isBlank()) {
+            if (!province.trim().equals(text(node, "province"))) changes.add("provincia " + province.trim());
+            node.put("province", province.trim());
+        }
+        if (city != null && !city.isBlank()) {
+            if (!city.trim().equals(text(node, "city"))) changes.add("ciudad " + city.trim());
+            node.put("city", city.trim());
+        }
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos inválidos");
+        }
+        String fullName = text(node, "fullName");
+        Order base = o.withCheckoutJson(json);
+        Order saved = repository.save(fullName.isBlank() ? base : new Order(base.id(), base.code(), fullName,
+                base.clientEmail(), base.clientPhone(), base.notes(), base.checkoutJson(), base.items(), base.total(),
+                base.status(), base.createdAt(), base.source(), base.scheduledAt(), base.paidAt(), base.doneAt(),
+                base.doneBy(), base.paidAmount()));
+        if (!changes.isEmpty()) {
+            log(id, actor, "NOTE", "Datos de guía: " + String.join(", ", changes)
+                    + (note == null || note.isBlank() ? "" : " · " + note.trim()), null);
+        }
+        return saved;
+    }
+
+    /** Cédula guardada en el pedido (para exigirla al pasar a Pagado). */
+    public boolean hasCedula(Order o) {
+        JsonNode n = readJson(o.checkoutJson());
+        return n != null && !text(n, "cedula").isBlank();
+    }
+
+    @Override
+    @Transactional
     public Order updateDelivery(String id, String fulfillmentMethod, String city, String address, String references,
                                 String mapsUrl, String note, String actor) {
         String method = "delivery".equalsIgnoreCase(fulfillmentMethod) ? "delivery" : "pickup";

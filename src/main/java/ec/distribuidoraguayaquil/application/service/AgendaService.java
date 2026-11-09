@@ -93,6 +93,12 @@ public class AgendaService {
             String mapsUrl,
             String references,
             String notes,
+            /** Guía de envío */
+            String firstName,
+            String lastName,
+            String cedula,
+            String province,
+            Integer packages,
             BigDecimal balance,
             List<AgendaItemDto> items,
             List<OrderEvent> history
@@ -321,6 +327,8 @@ public class AgendaService {
                 text(c, "fulfillmentMethod"), text(c, "deliveryZone"), text(c, "city"), text(c, "address"),
                 text(c, "mapsUrl"), text(c, "references"),
                 o.notes() != null && !o.notes().isBlank() ? o.notes() : text(c, "notes"),
+                text(c, "firstName"), text(c, "lastName"), text(c, "cedula"), text(c, "province"),
+                c != null && c.has("packages") ? c.get("packages").asInt(1) : null,
                 o.balance(), items,
                 withHistory ? orders.events(o.id()) : List.of());
     }

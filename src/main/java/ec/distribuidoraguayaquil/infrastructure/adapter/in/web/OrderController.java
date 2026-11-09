@@ -3,6 +3,10 @@ package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 import ec.distribuidoraguayaquil.domain.model.Order;
 import ec.distribuidoraguayaquil.domain.model.OrderEvent;
 import ec.distribuidoraguayaquil.domain.model.OrderItem;
+import ec.distribuidoraguayaquil.domain.model.RequestStatus;
+import ec.distribuidoraguayaquil.application.service.OrderService;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import ec.distribuidoraguayaquil.domain.port.in.AuthUseCase;
 import ec.distribuidoraguayaquil.domain.port.in.OrderUseCase;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.AttachOrderPdfRequest;
@@ -73,14 +77,32 @@ public class OrderController {
     @PutMapping("/{id}/status")
     public Order updateStatus(@PathVariable String id, @Valid @RequestBody StatusUpdateRequest request,
                               HttpServletRequest http) {
+        String who = actor(http);
+        // Al pasar a Pagado se guardan los datos de la guía (cédula y paquetes).
+        if (request.cedula() != null || request.packages() != null) {
+            orderUseCase.updateShipping(id, null, null, request.cedula(), request.packages(), null, null, null, who);
+        }
+        if (request.status() == RequestStatus.PAID && orderUseCase instanceof OrderService svc
+                && !svc.hasCedula(orderUseCase.getById(id))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Para pasar a Pagado escribe la cédula de quien recibe (va en la guía de envío).");
+        }
         return orderUseCase.updateStatus(id, request.status(), request.scheduledAt(), request.deposit(),
-                request.note(), actor(http));
+                request.note(), who);
     }
 
     @PutMapping("/{id}/schedule")
     public Order reschedule(@PathVariable String id, @Valid @RequestBody OrderAgendaRequests.Reschedule request,
                             HttpServletRequest http) {
         return orderUseCase.reschedule(id, request.scheduledAt(), request.reason(), actor(http));
+    }
+
+    /** Admin: datos de la guía (nombres, apellidos, cédula, paquetes, provincia, ciudad). */
+    @PutMapping("/{id}/shipping")
+    public Order updateShipping(@PathVariable String id, @RequestBody OrderAgendaRequests.Shipping request,
+                                HttpServletRequest http) {
+        return orderUseCase.updateShipping(id, request.firstName(), request.lastName(), request.cedula(),
+                request.packages(), request.province(), request.city(), request.note(), actor(http));
     }
 
     /** Admin: el cliente cambió de retiro a envío (o al revés) / nueva dirección. */

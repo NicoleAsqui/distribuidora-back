@@ -13,6 +13,10 @@ public record StatusUpdateRequest(
         @NotNull RequestStatus status,
         Instant scheduledAt,
         BigDecimal deposit,
-        String note
+        String note,
+        /** Al pasar a Pagado: cédula de quien recibe (para la guía). */
+        String cedula,
+        /** Al pasar a Pagado: número de paquetes (para la guía). */
+        Integer packages
 ) {
 }
