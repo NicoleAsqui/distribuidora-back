@@ -82,11 +82,7 @@ public class OrderController {
         if (request.cedula() != null || request.packages() != null) {
             orderUseCase.updateShipping(id, null, null, request.cedula(), request.packages(), null, null, null, who);
         }
-        if (request.status() == RequestStatus.PAID && orderUseCase instanceof OrderService svc
-                && !svc.hasCedula(orderUseCase.getById(id))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Para pasar a Pagado escribe la cédula de quien recibe (va en la guía de envío).");
-        }
+        // La cédula es opcional (a veces el cliente aún no la envía); el admin ve un aviso si falta.
         return orderUseCase.updateStatus(id, request.status(), request.scheduledAt(), request.deposit(),
                 request.note(), who);
     }
@@ -101,8 +97,12 @@ public class OrderController {
     @PutMapping("/{id}/shipping")
     public Order updateShipping(@PathVariable String id, @RequestBody OrderAgendaRequests.Shipping request,
                                 HttpServletRequest http) {
+        String who = actor(http);
+        if (request.phone() != null || request.email() != null) {
+            orderUseCase.updateContact(id, request.phone(), request.email(), who);
+        }
         return orderUseCase.updateShipping(id, request.firstName(), request.lastName(), request.cedula(),
-                request.packages(), request.province(), request.city(), request.note(), actor(http));
+                request.packages(), request.province(), request.city(), request.note(), who);
     }
 
     /** Admin: el cliente cambió de retiro a envío (o al revés) / nueva dirección. */

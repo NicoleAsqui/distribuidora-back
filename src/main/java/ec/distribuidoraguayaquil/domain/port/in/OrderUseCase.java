@@ -47,6 +47,9 @@ public interface OrderUseCase {
     Order updateShipping(String id, String firstName, String lastName, String cedula, Integer packages,
                          String province, String city, String note, String actor);
 
+    /** Teléfono y email del cliente (editar el pedido). null = no cambia. */
+    Order updateContact(String id, String phone, String email, String actor);
+
     /**
      * Cambia la forma de entrega (retiro ↔ envío) y la dirección. Recalcula el total
      * (retiro tiene 3% de descuento) salvo en pedidos que vienen de cotización (total pactado).

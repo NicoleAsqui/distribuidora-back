@@ -532,6 +532,41 @@ public class OrderService implements OrderUseCase {
         return saved;
     }
 
+    @Override
+    @Transactional
+    public Order updateContact(String id, String phone, String email, String actor) {
+        Order o = getById(id);
+        JsonNode tree = readJson(o.checkoutJson());
+        ObjectNode node = tree == null ? objectMapper.createObjectNode() : (ObjectNode) tree;
+        List<String> changes = new java.util.ArrayList<>();
+        String newPhone = o.clientPhone();
+        String newEmail = o.clientEmail();
+        if (phone != null && !phone.isBlank() && !phone.trim().equals(o.clientPhone())) {
+            newPhone = phone.trim();
+            node.put("phone", newPhone);
+            changes.add("teléfono " + newPhone);
+        }
+        if (email != null && !email.trim().equals(o.clientEmail() == null ? "" : o.clientEmail())) {
+            newEmail = email.trim();
+            node.put("email", newEmail);
+            changes.add(newEmail.isEmpty() ? "email borrado" : "email " + newEmail);
+        }
+        if (changes.isEmpty()) {
+            return o;
+        }
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos inválidos");
+        }
+        Order saved = repository.save(new Order(o.id(), o.code(), o.clientName(), newEmail, newPhone, o.notes(), json,
+                o.items(), o.total(), o.status(), o.createdAt(), o.source(), o.scheduledAt(), o.paidAt(), o.doneAt(),
+                o.doneBy(), o.paidAmount()));
+        log(id, actor, "NOTE", "Datos del cliente: " + String.join(", ", changes), null);
+        return saved;
+    }
+
     /** Cédula guardada en el pedido (para exigirla al pasar a Pagado). */
     public boolean hasCedula(Order o) {
         JsonNode n = readJson(o.checkoutJson());
