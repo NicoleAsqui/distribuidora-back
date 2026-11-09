@@ -70,7 +70,7 @@ public class AgendaService {
     public record StaffDto(Long id, String nombre, boolean activo, Instant createdAt) {
     }
 
-    public record AgendaItemDto(String name, String size, String color, int qty, String image) {
+    public record AgendaItemDto(String name, String size, String color, int qty, String image, String seccion) {
     }
 
     /** Pedido tal como lo ve el taller: sin precios, con el saldo a cobrar. */
@@ -312,7 +312,7 @@ public class AgendaService {
             c = null;
         }
         List<AgendaItemDto> items = o.items() == null ? List.of() : o.items().stream()
-                .map(i -> new AgendaItemDto(i.name(), i.size(), i.color(), i.qty(), i.image()))
+                .map(i -> new AgendaItemDto(i.name(), i.size(), i.color(), i.qty(), i.image(), i.seccion()))
                 .toList();
         return new AgendaEntryDto(
                 o.id(), o.code(), o.source(), o.status() == null ? null : o.status().name(),

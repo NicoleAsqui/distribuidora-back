@@ -25,7 +25,9 @@ public record CreateOrderRequest(
             String color,
             @NotNull BigDecimal price,
             @Min(1) int qty,
-            String image
+            String image,
+            /** Sección del catálogo (cartulina, acetato, mdf…). */
+            String seccion
     ) {
     }
 }

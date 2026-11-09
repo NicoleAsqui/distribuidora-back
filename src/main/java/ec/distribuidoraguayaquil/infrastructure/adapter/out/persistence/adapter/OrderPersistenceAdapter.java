@@ -66,6 +66,7 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
                 ie.setPrice(item.price());
                 ie.setQty(item.qty());
                 ie.setImage(item.image());
+                ie.setSeccion(item.seccion());
                 entity.getItems().add(ie);
             }
         }
@@ -83,7 +84,7 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
         List<OrderItem> items = e.getItems().stream()
                 .map(i -> new OrderItem(
                         i.getProductRef(), i.getName(), i.getSize(), i.getColor(),
-                        i.getPrice(), i.getQty(), i.getImage()))
+                        i.getPrice(), i.getQty(), i.getImage(), i.getSeccion()))
                 .toList();
         return new Order(e.getId(), e.getCode(), e.getClientName(), e.getClientEmail(), e.getClientPhone(),
                 e.getNotes(), e.getCheckoutJson(), items, e.getTotal(), e.getStatus(), e.getCreatedAt(),

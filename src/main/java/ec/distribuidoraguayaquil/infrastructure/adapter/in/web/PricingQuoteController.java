@@ -156,12 +156,24 @@ public class PricingQuoteController {
                 String color = it.path("material").asText("");
                 String image = it.path("imageUrl").asText("");
                 out.add(new OrderItem(q.getCode(), name, size, color,
-                        unit.setScale(2, RoundingMode.HALF_UP), qty, image.isBlank() ? null : image));
+                        unit.setScale(2, RoundingMode.HALF_UP), qty, image.isBlank() ? null : image,
+                        seccionFromMaterial(it.path("seccion").asText(color))));
             }
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se pudieron leer los productos de la cotización.");
         }
         return out;
+    }
+
+    /** Sección a partir del material de la cotización (cartulina / carton / madera→mdf / acetato). */
+    private static String seccionFromMaterial(String m) {
+        String s = m == null ? "" : m.trim().toLowerCase();
+        if (s.contains("madera") || s.contains("mdf")) return "mdf";
+        if (s.contains("cart") && s.contains("n") && !s.contains("cartulina")) return "carton";
+        if (s.contains("cartulina")) return "cartulina";
+        if (s.contains("acetato")) return "acetato";
+        if (s.contains("tarjeta") || s.contains("etiqueta")) return "tarjetas";
+        return s.isEmpty() ? null : "varios";
     }
 
     private static BigDecimal dec(JsonNode n) {

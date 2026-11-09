@@ -110,7 +110,8 @@ public class OrderController {
 
     private Order toOrder(CreateOrderRequest request) {
         List<OrderItem> items = request.items().stream()
-                .map(i -> new OrderItem(i.productRef(), i.name(), i.size(), i.color(), i.price(), i.qty(), i.image()))
+                .map(i -> new OrderItem(i.productRef(), i.name(), i.size(), i.color(), i.price(), i.qty(), i.image(),
+                        i.seccion() == null || i.seccion().isBlank() ? null : i.seccion().trim().toLowerCase()))
                 .toList();
         return new Order(
                 null, null, request.clientName(), request.clientEmail(), request.clientPhone(),
