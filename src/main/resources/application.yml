@@ -71,13 +71,13 @@ app:
     firma-key: ${SRI_FIRMA_KEY:}
     secuencial-inicial: ${SRI_SECUENCIAL_INICIAL:1}
     emisor:
-      ruc: ${SRI_EMISOR_RUC:}
-      razon-social: ${SRI_EMISOR_RAZON_SOCIAL:}
-      nombre-comercial: ${SRI_EMISOR_NOMBRE_COMERCIAL:}
-      dir-matriz: ${SRI_EMISOR_DIR_MATRIZ:}
-      dir-establecimiento: ${SRI_EMISOR_DIR_ESTABLECIMIENTO:}
-      establecimiento: ${SRI_EMISOR_ESTAB:001}
-      punto-emision: ${SRI_EMISOR_PTO:001}
+      ruc: ${SRI_EMISOR_RUC:0953518057001}
+      razon-social: ${SRI_EMISOR_RAZON_SOCIAL:ASQUI MANZABA NICOLE KATHERINE}
+      nombre-comercial: ${SRI_EMISOR_NOMBRE_COMERCIAL:ETERNITY EC}
+      dir-matriz: '${SRI_EMISOR_DIR_MATRIZ:Barrio: URB ASTURIAS Numero: SOLAR 32 Manzana: 13}'
+      dir-establecimiento: '${SRI_EMISOR_DIR_ESTABLECIMIENTO:Calle: LA IOJA Numero: MZ 23 Interseccion: SL32}'
+      establecimiento: ${SRI_EMISOR_ESTAB:002}
+      punto-emision: ${SRI_EMISOR_PTO:002}
       obligado-contabilidad: ${SRI_EMISOR_OBLIGADO_CONTABILIDAD:NO}
       contribuyente-rimpe: ${SRI_EMISOR_RIMPE:}
       logo-url: ${SRI_EMISOR_LOGO_URL:}
