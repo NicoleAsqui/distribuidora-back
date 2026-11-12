@@ -53,6 +53,7 @@ public class CatalogSchemaMigrationRunner implements ApplicationRunner {
         runScript("027_facturas.sql");
         runScript("028_sri_firma.sql");
         runScript("029_sri_ajustes.sql");
+        runScript("030_factura_productos.sql");
     }
 
     private void runScript(String name) {

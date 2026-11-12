@@ -7,7 +7,9 @@ import ec.distribuidoraguayaquil.application.service.sri.SriFirmaStore;
 import ec.distribuidoraguayaquil.application.service.sri.SriWebService;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.EmitirFacturaAdminRequest;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.FacturaEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.FacturaProductoEntity;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.FacturaJpaRepository;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.FacturaProductoJpaRepository;
 import ec.distribuidoraguayaquil.infrastructure.config.SriFacturacionConfig.SriFacturacionProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,15 +41,18 @@ public class FacturacionService {
     private final ObjectMapper objectMapper;
     private final ResendEmailService mail;
     private final SriFirmaStore firmas;
+    private final FacturaProductoJpaRepository productos;
     private final SecureRandom random = new SecureRandom();
 
     public FacturacionService(SriAjustesStore ajustes, FacturaJpaRepository repository,
-                              ObjectMapper objectMapper, ResendEmailService mail, SriFirmaStore firmas) {
+                              ObjectMapper objectMapper, ResendEmailService mail, SriFirmaStore firmas,
+                              FacturaProductoJpaRepository productos) {
         this.ajustes = ajustes;
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.mail = mail;
         this.firmas = firmas;
+        this.productos = productos;
     }
 
     private SriFacturacionProperties props() {
@@ -125,7 +130,8 @@ public class FacturacionService {
         }
         var e = props().getEmisor();
         SriComprobante.Comprador c = comprador(req.comprador());
-        List<SriComprobante.Linea> lineas = lineas(req.detalles());
+        List<FacturaProductoEntity> usados = new ArrayList<>();
+        List<SriComprobante.Linea> lineas = lineas(req.detalles(), usados);
         SriComprobante.Totales t = SriComprobante.totales(lineas);
         if ("07".equals(c.tipoIdentificacion()) && t.total().compareTo(LIMITE_CONSUMIDOR_FINAL) > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -179,6 +185,13 @@ public class FacturacionService {
             f.setMensajes(ex.getMessage());
         }
         repository.save(f);
+        if ("AUTORIZADO".equals(f.getEstado())) {
+            for (FacturaProductoEntity p : usados) {
+                p.setVeces(p.getVeces() + 1);
+                p.setUpdatedAt(Instant.now());
+                productos.save(p);
+            }
+        }
         return toDto(f);
     }
 
@@ -286,12 +299,18 @@ public class FacturacionService {
                 blankToNull(c.telefono()), blankToNull(c.email()));
     }
 
-    private List<SriComprobante.Linea> lineas(List<EmitirFacturaAdminRequest.DetalleLineaDto> detalles) {
+    private List<SriComprobante.Linea> lineas(List<EmitirFacturaAdminRequest.DetalleLineaDto> detalles,
+                                              List<FacturaProductoEntity> usados) {
         List<SriComprobante.Linea> out = new ArrayList<>();
         for (var d : detalles) {
-            String codigo = d.codigoPrincipal() == null || d.codigoPrincipal().isBlank()
-                    ? codigoDesde(d.descripcion())
-                    : d.codigoPrincipal().trim();
+            String codigo;
+            if (d.codigoPrincipal() == null || d.codigoPrincipal().isBlank()) {
+                FacturaProductoEntity p = productoFueraDeCatalogo(d.descripcion(), d.precioUnitario());
+                usados.add(p);
+                codigo = p.getCodigo();
+            } else {
+                codigo = d.codigoPrincipal().trim();
+            }
             var l = new SriComprobante.Linea(codigo.length() > 25 ? codigo.substring(0, 25) : codigo,
                     d.descripcion().trim(), d.cantidad(), d.precioUnitario(),
                     d.descuento() == null ? BigDecimal.ZERO : d.descuento());
@@ -301,14 +320,51 @@ public class FacturacionService {
         return out;
     }
 
-    /** Código automático cuando el producto no tiene SKU: "CAJA-BASE-TAPA-20X15". */
-    static String codigoDesde(String descripcion) {
+    /**
+     * Producto sin código: si ya se facturó (misma descripción normalizada) se reutiliza su código;
+     * si no, se registra con el siguiente FX-0001, FX-0002… (nunca choca con los DG- del catálogo).
+     */
+    private FacturaProductoEntity productoFueraDeCatalogo(String descripcion, BigDecimal precio) {
+        String clave = clave(descripcion);
+        FacturaProductoEntity p = productos.findByClave(clave).orElse(null);
+        if (p == null) {
+            p = new FacturaProductoEntity();
+            p.setCodigo("TMP-" + UUID.randomUUID().toString().substring(0, 18));
+            p.setClave(clave);
+            p.setDescripcion(descripcion.trim());
+            p.setVeces(0);
+            p.setCreatedAt(Instant.now());
+            p.setUpdatedAt(Instant.now());
+            p = productos.save(p);
+            p.setCodigo(String.format("FX-%04d", p.getId()));
+        }
+        p.setUltimoPrecio(precio);
+        return productos.save(p);
+    }
+
+    public List<Map<String, Object>> buscarProductos(String q) {
+        return productos.findTop10ByClaveContainingOrderByVecesDesc(clave(q == null ? "" : q)).stream()
+                .map(p -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("codigo", p.getCodigo());
+                    m.put("descripcion", p.getDescripcion());
+                    m.put("ultimoPrecio", p.getUltimoPrecio());
+                    m.put("veces", p.getVeces());
+                    return m;
+                })
+                .toList();
+    }
+
+    /** Descripción normalizada para reconocer el mismo producto: "Caja Corazón · 25×25×6" → "CAJA-CORAZON-25-25-6". */
+    static String clave(String descripcion) {
         String c = java.text.Normalizer.normalize(descripcion, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
+                .replaceAll("(?<=\\d)\\s*[xX×*]\\s*(?=\\d)", "-")
                 .toUpperCase(Locale.ROOT)
+                .replaceAll("\\bCM\\b", " ")
                 .replaceAll("[^A-Z0-9]+", "-")
                 .replaceAll("(^-|-$)", "");
-        return c.isBlank() ? "ITEM" : c;
+        return c.length() > 300 ? c.substring(0, 300) : c;
     }
 
     private int siguienteSecuencial() {

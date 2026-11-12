@@ -36,6 +36,12 @@ public class FacturacionAdminController {
         this.padron = padron;
     }
 
+    /** Productos ya facturados fuera del catálogo (código FX-…), para reutilizarlos. */
+    @GetMapping("/productos")
+    public List<Map<String, Object>> productos(@RequestParam(defaultValue = "") String q) {
+        return facturacionService.buscarProductos(q);
+    }
+
     /** Datos del cliente según el SRI (cédula o RUC), para autocompletar la factura. */
     @GetMapping("/contribuyente")
     public Map<String, Object> contribuyente(@RequestParam String id) {
