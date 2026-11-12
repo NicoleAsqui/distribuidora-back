@@ -16,8 +16,11 @@ public record EmitirFacturaAdminRequest(
         String fechaEmision,
         @NotNull @Valid CompradorDto comprador,
         @NotEmpty @Valid List<DetalleLineaDto> detalles,
-        /** Forma de pago SRI, default 01. */
-        String formaPago
+        /** Forma de pago SRI: 20 = otros con utilización del sistema financiero. */
+        String formaPago,
+        /** Pedido del que sale la factura (opcional). */
+        String orderId,
+        String orderCode
 ) {
     public record CompradorDto(
             @NotBlank String tipoIdentificacion,
@@ -30,7 +33,7 @@ public record EmitirFacturaAdminRequest(
     }
 
     public record DetalleLineaDto(
-            @NotBlank String codigoPrincipal,
+            String codigoPrincipal,
             @NotBlank String descripcion,
             @NotNull @Min(0) BigDecimal cantidad,
             @NotNull @Min(0) BigDecimal precioUnitario,

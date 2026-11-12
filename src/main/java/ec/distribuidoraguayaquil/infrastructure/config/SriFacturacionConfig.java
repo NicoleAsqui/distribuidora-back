@@ -4,6 +4,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Configuration
 public class SriFacturacionConfig {
 
@@ -14,25 +17,42 @@ public class SriFacturacionConfig {
     }
 
     public static class SriFacturacionProperties {
-        private String apiUrl = "";
-        private String apiToken = "";
+        /** 1 = pruebas, 2 = producción. */
         private String ambiente = "1";
+        /** Firma electrónica (.p12) en base64 y su clave. */
+        private String p12Base64 = "";
+        private String p12Password = "";
+        /** Primer secuencial a usar si aún no hay facturas en este ambiente. */
+        private int secuencialInicial = 1;
         private final Emisor emisor = new Emisor();
 
-        public String getApiUrl() { return apiUrl; }
-        public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
-        public String getApiToken() { return apiToken; }
-        public void setApiToken(String apiToken) { this.apiToken = apiToken; }
-        public String getAmbiente() { return ambiente; }
+        public String getAmbiente() { return ambiente == null || ambiente.isBlank() ? "1" : ambiente.trim(); }
         public void setAmbiente(String ambiente) { this.ambiente = ambiente; }
+        public String getP12Base64() { return p12Base64; }
+        public void setP12Base64(String p12Base64) { this.p12Base64 = p12Base64; }
+        public String getP12Password() { return p12Password; }
+        public void setP12Password(String p12Password) { this.p12Password = p12Password; }
+        public int getSecuencialInicial() { return Math.max(1, secuencialInicial); }
+        public void setSecuencialInicial(int secuencialInicial) { this.secuencialInicial = secuencialInicial; }
         public Emisor getEmisor() { return emisor; }
 
+        /** Qué falta para poder emitir (vacío = listo). */
+        public List<String> missing() {
+            List<String> out = new ArrayList<>();
+            if (blank(emisor.ruc)) out.add("SRI_EMISOR_RUC");
+            if (blank(emisor.razonSocial)) out.add("SRI_EMISOR_RAZON_SOCIAL");
+            if (blank(emisor.dirMatriz)) out.add("SRI_EMISOR_DIR_MATRIZ");
+            if (blank(p12Base64)) out.add("SRI_P12_BASE64");
+            if (blank(p12Password)) out.add("SRI_P12_PASSWORD");
+            return out;
+        }
+
         public boolean isConfigured() {
-            return apiUrl != null && !apiUrl.isBlank()
-                    && apiToken != null && !apiToken.isBlank()
-                    && emisor.getRuc() != null && !emisor.getRuc().isBlank()
-                    && emisor.getRazonSocial() != null && !emisor.getRazonSocial().isBlank()
-                    && emisor.getDirMatriz() != null && !emisor.getDirMatriz().isBlank();
+            return missing().isEmpty();
+        }
+
+        private static boolean blank(String s) {
+            return s == null || s.isBlank();
         }
 
         public static class Emisor {
@@ -43,7 +63,11 @@ public class SriFacturacionConfig {
             private String dirEstablecimiento = "";
             private String establecimiento = "001";
             private String puntoEmision = "001";
-            private String obligadoContabilidad = "SI";
+            private String obligadoContabilidad = "NO";
+            /** Leyenda RIMPE si aplica, p. ej. "CONTRIBUYENTE RÉGIMEN RIMPE". */
+            private String contribuyenteRimpe = "";
+            /** Logo del establecimiento para el PDF (RIDE). */
+            private String logoUrl = "";
 
             public String getRuc() { return ruc; }
             public void setRuc(String ruc) { this.ruc = ruc; }
@@ -61,6 +85,10 @@ public class SriFacturacionConfig {
             public void setPuntoEmision(String puntoEmision) { this.puntoEmision = puntoEmision; }
             public String getObligadoContabilidad() { return obligadoContabilidad; }
             public void setObligadoContabilidad(String obligadoContabilidad) { this.obligadoContabilidad = obligadoContabilidad; }
+            public String getContribuyenteRimpe() { return contribuyenteRimpe; }
+            public void setContribuyenteRimpe(String contribuyenteRimpe) { this.contribuyenteRimpe = contribuyenteRimpe; }
+            public String getLogoUrl() { return logoUrl; }
+            public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
         }
     }
 }

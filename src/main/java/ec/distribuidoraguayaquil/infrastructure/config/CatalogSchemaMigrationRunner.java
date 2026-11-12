@@ -50,6 +50,8 @@ public class CatalogSchemaMigrationRunner implements ApplicationRunner {
         runScript("024_quote_order_link.sql");
         runScript("025_quote_sent_at.sql");
         runScript("026_order_item_seccion.sql");
+        runScript("027_facturas.sql");
+        runScript("028_sri_firma.sql");
     }
 
     private void runScript(String name) {

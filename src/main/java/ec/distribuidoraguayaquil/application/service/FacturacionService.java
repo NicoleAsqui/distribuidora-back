@@ -1,190 +1,341 @@
 package ec.distribuidoraguayaquil.application.service;
 
+import ec.distribuidoraguayaquil.application.service.sri.SriComprobante;
+import ec.distribuidoraguayaquil.application.service.sri.SriFirma;
+import ec.distribuidoraguayaquil.application.service.sri.SriWebService;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.EmitirFacturaAdminRequest;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.FacturaEntity;
+import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.repository.FacturaJpaRepository;
 import ec.distribuidoraguayaquil.infrastructure.config.SriFacturacionConfig.SriFacturacionProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class FacturacionService {
 
     private static final Logger log = LoggerFactory.getLogger(FacturacionService.class);
-    private static final BigDecimal IVA_TARIFA = new BigDecimal("15");
-    private static final BigDecimal IVA_FACTOR = new BigDecimal("0.15");
+    private static final String CONSUMIDOR_FINAL = "9999999999999";
+    private static final BigDecimal LIMITE_CONSUMIDOR_FINAL = new BigDecimal("50");
 
     private final SriFacturacionProperties props;
-    private final RestClient restClient;
+    private final FacturaJpaRepository repository;
+    private final ObjectMapper objectMapper;
+    private final ResendEmailService mail;
+    private final SecureRandom random = new SecureRandom();
+    private SriFirma firma;
 
-    public FacturacionService(SriFacturacionProperties props) {
+    public FacturacionService(SriFacturacionProperties props, FacturaJpaRepository repository,
+                              ObjectMapper objectMapper, ResendEmailService mail) {
         this.props = props;
-        this.restClient = RestClient.create();
+        this.repository = repository;
+        this.objectMapper = objectMapper;
+        this.mail = mail;
     }
 
     public Map<String, Object> publicConfig() {
+        var e = props.getEmisor();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("configured", props.isConfigured());
-        out.put("ambiente", props.getAmbiente() == null || props.getAmbiente().isBlank() ? "1" : props.getAmbiente());
-        SriFacturacionProperties.Emisor e = props.getEmisor();
+        out.put("missing", props.missing());
+        out.put("ambiente", props.getAmbiente());
+        out.put("siguienteNumero", numero(siguienteSecuencial()));
+        out.put("emailConfigured", mail.isConfigured());
         Map<String, Object> emisor = new LinkedHashMap<>();
-        emisor.put("rucMasked", maskRuc(e.getRuc()));
-        emisor.put("razonSocial", blankToEmpty(e.getRazonSocial()));
-        emisor.put("nombreComercial", blankToEmpty(e.getNombreComercial()));
-        emisor.put("dirMatriz", blankToEmpty(e.getDirMatriz()));
-        emisor.put("dirEstablecimiento", blankToEmpty(e.getDirEstablecimiento()));
-        emisor.put("establecimiento", blankToEmpty(e.getEstablecimiento()));
-        emisor.put("puntoEmision", blankToEmpty(e.getPuntoEmision()));
-        emisor.put("obligadoContabilidad", blankToEmpty(e.getObligadoContabilidad()));
+        emisor.put("ruc", s(e.getRuc()));
+        emisor.put("razonSocial", s(e.getRazonSocial()));
+        emisor.put("nombreComercial", s(e.getNombreComercial()));
+        emisor.put("dirMatriz", s(e.getDirMatriz()));
+        emisor.put("dirEstablecimiento", s(e.getDirEstablecimiento()));
+        emisor.put("establecimiento", s(e.getEstablecimiento()));
+        emisor.put("puntoEmision", s(e.getPuntoEmision()));
+        emisor.put("obligadoContabilidad", s(e.getObligadoContabilidad()));
+        emisor.put("contribuyenteRimpe", s(e.getContribuyenteRimpe()));
+        emisor.put("logoUrl", s(e.getLogoUrl()));
         out.put("emisor", emisor);
         return out;
     }
 
-    public Map<String, Object> emitir(EmitirFacturaAdminRequest request) {
-        if (!props.isConfigured()) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "Facturación SRI no configurada. Define SRI_API_URL, SRI_API_TOKEN y datos del emisor.");
-        }
+    public List<Map<String, Object>> list(String orderId) {
+        List<FacturaEntity> rows = orderId == null || orderId.isBlank()
+                ? repository.findAllByOrderByCreatedAtDesc()
+                : repository.findByOrderIdOrderByCreatedAtDesc(orderId);
+        return rows.stream().map(this::toDto).toList();
+    }
 
-        Map<String, Object> body = buildSriPayload(request);
-        String base = props.getApiUrl().replaceAll("/$", "");
-        String url = base + "/sri/emitir/factura";
+    public Map<String, Object> get(String id) {
+        return toDto(find(id));
+    }
+
+    /** Firma, envía al SRI y espera la autorización. */
+    public synchronized Map<String, Object> emitir(EmitirFacturaAdminRequest req, String actor) {
+        if (!props.isConfigured()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Facturación no configurada. Falta: " + String.join(", ", props.missing()));
+        }
+        var e = props.getEmisor();
+        SriComprobante.Comprador c = comprador(req.comprador());
+        List<SriComprobante.Linea> lineas = lineas(req.detalles());
+        SriComprobante.Totales t = SriComprobante.totales(lineas);
+        if ("07".equals(c.tipoIdentificacion()) && t.total().compareTo(LIMITE_CONSUMIDOR_FINAL) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A consumidor final solo se puede facturar hasta $50. Pide la cédula o RUC del cliente.");
+        }
+        String formaPago = req.formaPago() == null || req.formaPago().isBlank() ? "20" : req.formaPago().trim();
+
+        int secuencial = siguienteSecuencial();
+        String clave = SriComprobante.claveAcceso(req.fechaEmision(), e.getRuc().trim(), props.getAmbiente(),
+                e.getEstablecimiento(), e.getPuntoEmision(), secuencial, String.format("%08d", random.nextInt(100_000_000)));
+
+        FacturaEntity f = new FacturaEntity();
+        f.setId(UUID.randomUUID().toString());
+        f.setAmbiente(props.getAmbiente());
+        f.setSecuencial(secuencial);
+        f.setNumero(numero(secuencial));
+        f.setClaveAcceso(clave);
+        f.setEstado("CREADA");
+        f.setFechaEmision(req.fechaEmision());
+        f.setOrderId(blankToNull(req.orderId()));
+        f.setOrderCode(blankToNull(req.orderCode()));
+        f.setClienteIdentificacion(c.identificacion());
+        f.setClienteNombre(c.razonSocial());
+        f.setClienteEmail(blankToNull(c.email()));
+        f.setClienteTelefono(blankToNull(c.telefono()));
+        f.setSubtotal(t.subtotal());
+        f.setIva(t.iva());
+        f.setTotal(t.total());
+        f.setDatosJson(objectMapper.writeValueAsString(Map.of(
+                "comprador", c, "detalles", lineas, "formaPago", formaPago)));
+        f.setCreatedAt(Instant.now());
+        f.setCreatedBy(actor);
+        repository.save(f);
 
         try {
-            Map<String, Object> response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("Authorization", "Bearer " + props.getApiToken().trim())
-                    .body(body)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
-            if (response == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Respuesta vacía de la API SRI");
+            String xml = firma().firmar(SriComprobante.facturaXml(e, props.getAmbiente(), clave, secuencial,
+                    req.fechaEmision(), formaPago, c, lineas));
+            f.setXmlFirmado(xml);
+            SriWebService ws = new SriWebService(props.getAmbiente());
+            SriWebService.Respuesta r = ws.enviar(xml);
+            boolean yaRecibida = r.mensajes().stream().anyMatch(m -> m.startsWith("43 "));
+            if ("DEVUELTA".equals(r.estado()) && !yaRecibida) {
+                f.setEstado("DEVUELTA");
+                f.setMensajes(String.join("\n", r.mensajes()));
+            } else {
+                consultar(f, ws, 6);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            log.warn("API SRI error {}: {}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            String detail = ex.getResponseBodyAsString();
-            if (detail == null || detail.isBlank()) {
-                detail = ex.getStatusText();
-            }
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "API SRI (" + ex.getStatusCode().value() + "): " + truncate(detail, 500));
-        } catch (ResponseStatusException ex) {
-            throw ex;
         } catch (Exception ex) {
-            log.error("Error al emitir factura SRI", ex);
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "No se pudo contactar la API SRI: " + ex.getMessage());
+            log.error("Factura {}: {}", f.getNumero(), ex.getMessage(), ex);
+            f.setEstado("ERROR");
+            f.setMensajes(ex.getMessage());
         }
+        repository.save(f);
+        return toDto(f);
     }
 
-    private Map<String, Object> buildSriPayload(EmitirFacturaAdminRequest request) {
-        SriFacturacionProperties.Emisor e = props.getEmisor();
-        Map<String, Object> root = new LinkedHashMap<>();
-        String ambiente = props.getAmbiente() == null || props.getAmbiente().isBlank() ? "1" : props.getAmbiente().trim();
-        root.put("ambiente", ambiente);
-        root.put("tipoEmision", "1");
-        root.put("fechaEmision", request.fechaEmision());
-
-        Map<String, Object> emisor = new LinkedHashMap<>();
-        emisor.put("ruc", e.getRuc().trim());
-        emisor.put("razonSocial", e.getRazonSocial().trim());
-        if (e.getNombreComercial() != null && !e.getNombreComercial().isBlank()) {
-            emisor.put("nombreComercial", e.getNombreComercial().trim());
+    /** Vuelve a preguntar al SRI (para facturas que quedaron en proceso). */
+    public Map<String, Object> reconsultar(String id) {
+        FacturaEntity f = find(id);
+        if (!"AUTORIZADO".equals(f.getEstado())) {
+            consultar(f, new SriWebService(f.getAmbiente()), 2);
+            repository.save(f);
         }
-        emisor.put("dirMatriz", e.getDirMatriz().trim());
-        if (e.getDirEstablecimiento() != null && !e.getDirEstablecimiento().isBlank()) {
-            emisor.put("dirEstablecimiento", e.getDirEstablecimiento().trim());
-        }
-        emisor.put("establecimiento", blankOr(e.getEstablecimiento(), "001"));
-        emisor.put("puntoEmision", blankOr(e.getPuntoEmision(), "001"));
-        emisor.put("obligadoContabilidad", blankOr(e.getObligadoContabilidad(), "SI"));
-        root.put("emisor", emisor);
+        return toDto(f);
+    }
 
-        EmitirFacturaAdminRequest.CompradorDto c = request.comprador();
-        Map<String, Object> comprador = new LinkedHashMap<>();
-        comprador.put("tipoIdentificacion", c.tipoIdentificacion().trim());
-        comprador.put("identificacion", c.identificacion().trim());
-        comprador.put("razonSocial", c.razonSocial().trim());
-        if (c.direccion() != null && !c.direccion().isBlank()) comprador.put("direccion", c.direccion().trim());
-        if (c.telefono() != null && !c.telefono().isBlank()) comprador.put("telefono", c.telefono().trim());
-        if (c.email() != null && !c.email().isBlank()) comprador.put("email", c.email().trim());
-        root.put("comprador", comprador);
-
-        List<Map<String, Object>> detalles = new ArrayList<>();
-        BigDecimal totalConIva = BigDecimal.ZERO;
-
-        for (EmitirFacturaAdminRequest.DetalleLineaDto d : request.detalles()) {
-            BigDecimal cantidad = d.cantidad();
-            BigDecimal precio = d.precioUnitario();
-            BigDecimal descuento = d.descuento() == null ? BigDecimal.ZERO : d.descuento();
-            BigDecimal base = cantidad.multiply(precio).subtract(descuento).setScale(2, RoundingMode.HALF_UP);
-            if (base.compareTo(BigDecimal.ZERO) < 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La base imponible de un ítem no puede ser negativa");
+    private void consultar(FacturaEntity f, SriWebService ws, int intentos) {
+        for (int i = 0; i < intentos; i++) {
+            SriWebService.Respuesta a = ws.autorizacion(f.getClaveAcceso());
+            f.setEstado(a.estado() == null ? "EN PROCESO" : a.estado());
+            f.setMensajes(String.join("\n", a.mensajes()));
+            if ("AUTORIZADO".equals(a.estado())) {
+                f.setNumeroAutorizacion(a.numeroAutorizacion());
+                f.setFechaAutorizacion(a.fechaAutorizacion());
+                return;
             }
-            BigDecimal iva = base.multiply(IVA_FACTOR).setScale(2, RoundingMode.HALF_UP);
-            totalConIva = totalConIva.add(base).add(iva);
-
-            Map<String, Object> det = new LinkedHashMap<>();
-            det.put("codigoPrincipal", d.codigoPrincipal().trim());
-            det.put("descripcion", d.descripcion().trim());
-            det.put("cantidad", cantidad);
-            det.put("precioUnitario", precio);
-            det.put("descuento", descuento.setScale(2, RoundingMode.HALF_UP));
-
-            Map<String, Object> imp = new LinkedHashMap<>();
-            imp.put("codigo", "2");
-            imp.put("codigoPorcentaje", "4");
-            imp.put("tarifa", IVA_TARIFA);
-            imp.put("baseImponible", base);
-            imp.put("valor", iva);
-            det.put("impuestos", List.of(imp));
-            detalles.add(det);
+            if ("NO AUTORIZADO".equals(a.estado())) return;
+            try {
+                Thread.sleep(1500);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
-        root.put("detalles", detalles);
-
-        String formaPago = request.formaPago() == null || request.formaPago().isBlank()
-                ? "01"
-                : request.formaPago().trim();
-        Map<String, Object> pago = new LinkedHashMap<>();
-        pago.put("formaPago", formaPago);
-        pago.put("total", totalConIva.setScale(2, RoundingMode.HALF_UP));
-        root.put("pagos", List.of(pago));
-
-        return root;
     }
 
-    private static String maskRuc(String ruc) {
-        if (ruc == null || ruc.isBlank()) return "";
-        String t = ruc.trim();
-        if (t.length() < 5) return "****";
-        return t.substring(0, 3) + "*******" + t.substring(t.length() - 3);
+    /** Guarda el PDF (RIDE) en el registro y lo envía al cliente con el XML autorizado. */
+    public Map<String, Object> entregar(String id, String rideUrl, String pdfBase64, boolean enviarEmail) {
+        FacturaEntity f = find(id);
+        if (!"AUTORIZADO".equals(f.getEstado())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La factura aún no está autorizada por el SRI.");
+        }
+        if (rideUrl != null && rideUrl.startsWith("https://")) f.setRideUrl(rideUrl);
+        if (enviarEmail && f.getClienteEmail() != null && pdfBase64 != null && !pdfBase64.isBlank()) {
+            String b64 = pdfBase64.contains(",") ? pdfBase64.substring(pdfBase64.indexOf(',') + 1) : pdfBase64;
+            String xml = Base64.getEncoder().encodeToString(xmlAutorizado(f).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            mail.sendHtml(f.getClienteEmail(), "Tu factura " + f.getNumero() + " · " + s(props.getEmisor().getNombreComercial()).trim(),
+                    emailHtml(f), List.of(
+                            new ResendEmailService.Attachment("Factura-" + f.getNumero() + ".pdf", b64),
+                            new ResendEmailService.Attachment("Factura-" + f.getNumero() + ".xml", xml)));
+            f.setEmailEnviadoAt(Instant.now());
+        }
+        repository.save(f);
+        return toDto(f);
     }
 
-    private static String blankToEmpty(String v) {
+    public String xmlAutorizado(String id) {
+        return xmlAutorizado(find(id));
+    }
+
+    private String xmlAutorizado(FacturaEntity f) {
+        String comp = f.getXmlFirmado() == null ? "" : f.getXmlFirmado().replaceFirst("^<\\?xml[^>]*\\?>", "");
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<autorizacion>"
+                + "<estado>" + s(f.getEstado()) + "</estado>"
+                + "<numeroAutorizacion>" + s(f.getNumeroAutorizacion()) + "</numeroAutorizacion>"
+                + "<fechaAutorizacion>" + s(f.getFechaAutorizacion()) + "</fechaAutorizacion>"
+                + "<ambiente>" + ("2".equals(f.getAmbiente()) ? "PRODUCCIÓN" : "PRUEBAS") + "</ambiente>"
+                + "<comprobante><![CDATA[" + comp + "]]></comprobante></autorizacion>";
+    }
+
+    String emailHtml(FacturaEntity f) {
+        String negocio = esc(s(props.getEmisor().getNombreComercial()).isBlank()
+                ? props.getEmisor().getRazonSocial() : props.getEmisor().getNombreComercial());
+        return """
+                <div style="font-family:Arial,Helvetica,sans-serif;background:#f4f7fa;padding:24px 12px">
+                  <table role="presentation" width="100%%" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden">
+                    <tr><td style="background:#1a2744;color:#ffffff;padding:22px 26px">
+                      <div style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#5fe0e8">Factura electrónica</div>
+                      <div style="font-size:22px;font-weight:bold;margin-top:4px">%s</div>
+                    </td></tr>
+                    <tr><td style="padding:24px 26px;color:#0f172a;font-size:15px;line-height:1.6">
+                      <p style="margin:0 0 12px">Hola <strong>%s</strong>,</p>
+                      <p style="margin:0 0 12px">¡Muchas gracias por tu compra! 🎁 Adjuntamos tu factura electrónica autorizada por el SRI.</p>
+                      <table role="presentation" width="100%%" style="background:#f0fbfc;border-radius:12px;padding:14px 16px;font-size:14px">
+                        <tr><td>N.º de factura</td><td align="right"><strong>%s</strong></td></tr>
+                        <tr><td>Fecha</td><td align="right">%s</td></tr>
+                        <tr><td>Total</td><td align="right"><strong>$%s</strong></td></tr>
+                      </table>
+                      <p style="margin:14px 0 0;font-size:13px;color:#475569">Encontrarás el PDF (RIDE) y el archivo XML adjuntos. Guárdalos para tu contabilidad.</p>
+                      <p style="margin:14px 0 0">Esperamos verte pronto,<br><strong>%s</strong></p>
+                    </td></tr>
+                  </table>
+                </div>""".formatted(negocio, esc(f.getClienteNombre()), f.getNumero(), f.getFechaEmision(),
+                f.getTotal().toPlainString(), negocio);
+    }
+
+    private SriComprobante.Comprador comprador(EmitirFacturaAdminRequest.CompradorDto c) {
+        String tipo = c.tipoIdentificacion().trim();
+        String id = c.identificacion().replaceAll("\\s", "");
+        String nombre = c.razonSocial().trim();
+        switch (tipo) {
+            case "05" -> { if (!id.matches("\\d{10}")) bad("La cédula debe tener 10 dígitos."); }
+            case "04" -> { if (!id.matches("\\d{10}001")) bad("El RUC debe tener 13 dígitos y terminar en 001."); }
+            case "07" -> { id = CONSUMIDOR_FINAL; nombre = "CONSUMIDOR FINAL"; }
+            default -> { if (id.isBlank()) bad("Falta la identificación del cliente."); }
+        }
+        return new SriComprobante.Comprador(tipo, id, nombre.toUpperCase(Locale.ROOT), blankToNull(c.direccion()),
+                blankToNull(c.telefono()), blankToNull(c.email()));
+    }
+
+    private List<SriComprobante.Linea> lineas(List<EmitirFacturaAdminRequest.DetalleLineaDto> detalles) {
+        List<SriComprobante.Linea> out = new ArrayList<>();
+        for (var d : detalles) {
+            String codigo = d.codigoPrincipal() == null || d.codigoPrincipal().isBlank()
+                    ? codigoDesde(d.descripcion())
+                    : d.codigoPrincipal().trim();
+            var l = new SriComprobante.Linea(codigo.length() > 25 ? codigo.substring(0, 25) : codigo,
+                    d.descripcion().trim(), d.cantidad(), d.precioUnitario(),
+                    d.descuento() == null ? BigDecimal.ZERO : d.descuento());
+            if (l.base().signum() < 0) bad("El descuento no puede ser mayor que el valor del ítem.");
+            out.add(l);
+        }
+        return out;
+    }
+
+    /** Código automático cuando el producto no tiene SKU: "CAJA-BASE-TAPA-20X15". */
+    static String codigoDesde(String descripcion) {
+        String c = java.text.Normalizer.normalize(descripcion, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        return c.isBlank() ? "ITEM" : c;
+    }
+
+    private int siguienteSecuencial() {
+        return Math.max(repository.maxSecuencial(props.getAmbiente()) + 1, props.getSecuencialInicial());
+    }
+
+    private String numero(int secuencial) {
+        var e = props.getEmisor();
+        return s(e.getEstablecimiento()) + "-" + s(e.getPuntoEmision()) + "-" + String.format("%09d", secuencial);
+    }
+
+    private synchronized SriFirma firma() {
+        if (firma == null) {
+            firma = new SriFirma(Base64.getDecoder().decode(props.getP12Base64().replaceAll("\\s", "")),
+                    props.getP12Password().toCharArray());
+        }
+        return firma;
+    }
+
+    private FacturaEntity find(String id) {
+        return repository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Factura no encontrada"));
+    }
+
+    private Map<String, Object> toDto(FacturaEntity f) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", f.getId());
+        m.put("numero", f.getNumero());
+        m.put("claveAcceso", f.getClaveAcceso());
+        m.put("ambiente", f.getAmbiente());
+        m.put("estado", f.getEstado());
+        m.put("fechaEmision", f.getFechaEmision());
+        m.put("numeroAutorizacion", f.getNumeroAutorizacion());
+        m.put("fechaAutorizacion", f.getFechaAutorizacion());
+        m.put("mensajes", f.getMensajes() == null || f.getMensajes().isBlank() ? List.of() : List.of(f.getMensajes().split("\n")));
+        m.put("orderId", f.getOrderId());
+        m.put("orderCode", f.getOrderCode());
+        m.put("clienteNombre", f.getClienteNombre());
+        m.put("clienteIdentificacion", f.getClienteIdentificacion());
+        m.put("clienteEmail", f.getClienteEmail());
+        m.put("clienteTelefono", f.getClienteTelefono());
+        m.put("subtotal", f.getSubtotal());
+        m.put("iva", f.getIva());
+        m.put("total", f.getTotal());
+        m.put("datos", objectMapper.readTree(f.getDatosJson()));
+        m.put("rideUrl", f.getRideUrl());
+        m.put("emailEnviadoAt", f.getEmailEnviadoAt());
+        m.put("createdAt", f.getCreatedAt());
+        return m;
+    }
+
+    private static void bad(String msg) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, msg);
+    }
+
+    private static String s(String v) {
         return v == null ? "" : v.trim();
     }
 
-    private static String blankOr(String v, String fallback) {
-        return v == null || v.isBlank() ? fallback : v.trim();
+    private static String blankToNull(String v) {
+        return v == null || v.isBlank() ? null : v.trim();
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null) return "";
-        return s.length() <= max ? s : s.substring(0, max) + "…";
+    private static String esc(String v) {
+        return s(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

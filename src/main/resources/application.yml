@@ -64,12 +64,12 @@ app:
     resend-api-key: ${RESEND_API_KEY:}
     from: ${MAIL_FROM:noreply@distribuidoraguayaquil.com}
     from-name: ${MAIL_FROM_NAME:Distribuidora Guayaquil}
-  # Facturación electrónica (proxy a open-api-facturacion-sri)
-  # SRI_API_URL, SRI_API_TOKEN, SRI_EMISOR_* — ver .env.example
+  # Facturación electrónica SRI: el backend firma (XAdES-BES) y envía al SRI. Ver .env.example
   sri:
-    api-url: ${SRI_API_URL:}
-    api-token: ${SRI_API_TOKEN:}
     ambiente: ${SRI_AMBIENTE:1}
+    p12-base64: ${SRI_P12_BASE64:}
+    p12-password: ${SRI_P12_PASSWORD:}
+    secuencial-inicial: ${SRI_SECUENCIAL_INICIAL:1}
     emisor:
       ruc: ${SRI_EMISOR_RUC:}
       razon-social: ${SRI_EMISOR_RAZON_SOCIAL:}
@@ -78,4 +78,6 @@ app:
       dir-establecimiento: ${SRI_EMISOR_DIR_ESTABLECIMIENTO:}
       establecimiento: ${SRI_EMISOR_ESTAB:001}
       punto-emision: ${SRI_EMISOR_PTO:001}
-      obligado-contabilidad: ${SRI_EMISOR_OBLIGADO_CONTABILIDAD:SI}
+      obligado-contabilidad: ${SRI_EMISOR_OBLIGADO_CONTABILIDAD:NO}
+      contribuyente-rimpe: ${SRI_EMISOR_RIMPE:}
+      logo-url: ${SRI_EMISOR_LOGO_URL:}
