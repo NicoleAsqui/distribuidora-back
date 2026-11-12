@@ -20,8 +20,15 @@ public record EmitirFacturaAdminRequest(
         String formaPago,
         /** Pedido del que sale la factura (opcional). */
         String orderId,
-        String orderCode
+        String orderCode,
+        /** Clave de la firma electrónica: solo se usa para firmar, nunca se guarda. */
+        String claveFirma
 ) {
+    @Override
+    public String toString() {
+        return "EmitirFacturaAdminRequest[fechaEmision=" + fechaEmision + ", orderCode=" + orderCode + ", claveFirma=***]";
+    }
+
     public record CompradorDto(
             @NotBlank String tipoIdentificacion,
             @NotBlank String identificacion,

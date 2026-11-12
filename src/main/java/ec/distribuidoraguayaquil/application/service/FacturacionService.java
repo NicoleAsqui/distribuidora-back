@@ -1,7 +1,9 @@
 package ec.distribuidoraguayaquil.application.service;
 
+import ec.distribuidoraguayaquil.application.service.sri.SriAjustesStore;
 import ec.distribuidoraguayaquil.application.service.sri.SriComprobante;
 import ec.distribuidoraguayaquil.application.service.sri.SriFirma;
+import ec.distribuidoraguayaquil.application.service.sri.SriFirmaStore;
 import ec.distribuidoraguayaquil.application.service.sri.SriWebService;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.EmitirFacturaAdminRequest;
 import ec.distribuidoraguayaquil.infrastructure.adapter.out.persistence.entity.FacturaEntity;
@@ -32,27 +34,54 @@ public class FacturacionService {
     private static final String CONSUMIDOR_FINAL = "9999999999999";
     private static final BigDecimal LIMITE_CONSUMIDOR_FINAL = new BigDecimal("50");
 
-    private final SriFacturacionProperties props;
+    private final SriAjustesStore ajustes;
     private final FacturaJpaRepository repository;
     private final ObjectMapper objectMapper;
     private final ResendEmailService mail;
+    private final SriFirmaStore firmas;
     private final SecureRandom random = new SecureRandom();
-    private SriFirma firma;
 
-    public FacturacionService(SriFacturacionProperties props, FacturaJpaRepository repository,
-                              ObjectMapper objectMapper, ResendEmailService mail) {
-        this.props = props;
+    public FacturacionService(SriAjustesStore ajustes, FacturaJpaRepository repository,
+                              ObjectMapper objectMapper, ResendEmailService mail, SriFirmaStore firmas) {
+        this.ajustes = ajustes;
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.mail = mail;
+        this.firmas = firmas;
+    }
+
+    private SriFacturacionProperties props() {
+        return ajustes.vigente();
+    }
+
+    public Map<String, Object> guardarAjustes(SriAjustesStore.Ajustes a, boolean confirmarProduccion, String actor) {
+        ajustes.guardar(a, confirmarProduccion, actor);
+        return publicConfig();
+    }
+
+    private List<String> missing() {
+        List<String> m = new ArrayList<>(props().missing());
+        if (firmas.info().isEmpty()) m.add("Firma electrónica (.p12)");
+        return m;
+    }
+
+    public Map<String, Object> guardarFirma(byte[] p12, char[] clave, String actor) {
+        try {
+            return firmas.guardar(p12, clave, actor);
+        } finally {
+            java.util.Arrays.fill(clave, '\0');
+        }
     }
 
     public Map<String, Object> publicConfig() {
-        var e = props.getEmisor();
+        var e = props().getEmisor();
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("configured", props.isConfigured());
-        out.put("missing", props.missing());
-        out.put("ambiente", props.getAmbiente());
+        List<String> missing = missing();
+        out.put("configured", missing.isEmpty());
+        out.put("missing", missing);
+        out.put("firma", firmas.info().orElse(null));
+        out.put("ambiente", props().getAmbiente());
+        out.put("secuencialInicial", props().getSecuencialInicial());
         out.put("siguienteNumero", numero(siguienteSecuencial()));
         out.put("emailConfigured", mail.isConfigured());
         Map<String, Object> emisor = new LinkedHashMap<>();
@@ -83,11 +112,18 @@ public class FacturacionService {
 
     /** Firma, envía al SRI y espera la autorización. */
     public synchronized Map<String, Object> emitir(EmitirFacturaAdminRequest req, String actor) {
-        if (!props.isConfigured()) {
+        if (!props().isConfigured()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Facturación no configurada. Falta: " + String.join(", ", props.missing()));
+                    "Facturación no configurada. Falta: " + String.join(", ", props().missing()));
         }
-        var e = props.getEmisor();
+        char[] claveFirma = req.claveFirma() == null ? new char[0] : req.claveFirma().toCharArray();
+        SriFirma firma;
+        try {
+            firma = firmas.abrir(claveFirma);
+        } finally {
+            java.util.Arrays.fill(claveFirma, '\0');
+        }
+        var e = props().getEmisor();
         SriComprobante.Comprador c = comprador(req.comprador());
         List<SriComprobante.Linea> lineas = lineas(req.detalles());
         SriComprobante.Totales t = SriComprobante.totales(lineas);
@@ -98,12 +134,12 @@ public class FacturacionService {
         String formaPago = req.formaPago() == null || req.formaPago().isBlank() ? "20" : req.formaPago().trim();
 
         int secuencial = siguienteSecuencial();
-        String clave = SriComprobante.claveAcceso(req.fechaEmision(), e.getRuc().trim(), props.getAmbiente(),
+        String clave = SriComprobante.claveAcceso(req.fechaEmision(), e.getRuc().trim(), props().getAmbiente(),
                 e.getEstablecimiento(), e.getPuntoEmision(), secuencial, String.format("%08d", random.nextInt(100_000_000)));
 
         FacturaEntity f = new FacturaEntity();
         f.setId(UUID.randomUUID().toString());
-        f.setAmbiente(props.getAmbiente());
+        f.setAmbiente(props().getAmbiente());
         f.setSecuencial(secuencial);
         f.setNumero(numero(secuencial));
         f.setClaveAcceso(clave);
@@ -125,10 +161,10 @@ public class FacturacionService {
         repository.save(f);
 
         try {
-            String xml = firma().firmar(SriComprobante.facturaXml(e, props.getAmbiente(), clave, secuencial,
+            String xml = firma.firmar(SriComprobante.facturaXml(e, props().getAmbiente(), clave, secuencial,
                     req.fechaEmision(), formaPago, c, lineas));
             f.setXmlFirmado(xml);
-            SriWebService ws = new SriWebService(props.getAmbiente());
+            SriWebService ws = new SriWebService(props().getAmbiente());
             SriWebService.Respuesta r = ws.enviar(xml);
             boolean yaRecibida = r.mensajes().stream().anyMatch(m -> m.startsWith("43 "));
             if ("DEVUELTA".equals(r.estado()) && !yaRecibida) {
@@ -186,7 +222,7 @@ public class FacturacionService {
         if (enviarEmail && f.getClienteEmail() != null && pdfBase64 != null && !pdfBase64.isBlank()) {
             String b64 = pdfBase64.contains(",") ? pdfBase64.substring(pdfBase64.indexOf(',') + 1) : pdfBase64;
             String xml = Base64.getEncoder().encodeToString(xmlAutorizado(f).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            mail.sendHtml(f.getClienteEmail(), "Tu factura " + f.getNumero() + " · " + s(props.getEmisor().getNombreComercial()).trim(),
+            mail.sendHtml(f.getClienteEmail(), "Tu factura " + f.getNumero() + " · " + s(props().getEmisor().getNombreComercial()).trim(),
                     emailHtml(f), List.of(
                             new ResendEmailService.Attachment("Factura-" + f.getNumero() + ".pdf", b64),
                             new ResendEmailService.Attachment("Factura-" + f.getNumero() + ".xml", xml)));
@@ -211,8 +247,8 @@ public class FacturacionService {
     }
 
     String emailHtml(FacturaEntity f) {
-        String negocio = esc(s(props.getEmisor().getNombreComercial()).isBlank()
-                ? props.getEmisor().getRazonSocial() : props.getEmisor().getNombreComercial());
+        String negocio = esc(s(props().getEmisor().getNombreComercial()).isBlank()
+                ? props().getEmisor().getRazonSocial() : props().getEmisor().getNombreComercial());
         return """
                 <div style="font-family:Arial,Helvetica,sans-serif;background:#f4f7fa;padding:24px 12px">
                   <table role="presentation" width="100%%" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden">
@@ -276,20 +312,12 @@ public class FacturacionService {
     }
 
     private int siguienteSecuencial() {
-        return Math.max(repository.maxSecuencial(props.getAmbiente()) + 1, props.getSecuencialInicial());
+        return Math.max(repository.maxSecuencial(props().getAmbiente()) + 1, props().getSecuencialInicial());
     }
 
     private String numero(int secuencial) {
-        var e = props.getEmisor();
+        var e = props().getEmisor();
         return s(e.getEstablecimiento()) + "-" + s(e.getPuntoEmision()) + "-" + String.format("%09d", secuencial);
-    }
-
-    private synchronized SriFirma firma() {
-        if (firma == null) {
-            firma = new SriFirma(Base64.getDecoder().decode(props.getP12Base64().replaceAll("\\s", "")),
-                    props.getP12Password().toCharArray());
-        }
-        return firma;
     }
 
     private FacturaEntity find(String id) {

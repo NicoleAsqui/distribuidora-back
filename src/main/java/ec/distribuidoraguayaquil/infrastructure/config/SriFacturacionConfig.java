@@ -19,19 +19,12 @@ public class SriFacturacionConfig {
     public static class SriFacturacionProperties {
         /** 1 = pruebas, 2 = producción. */
         private String ambiente = "1";
-        /** Firma electrónica (.p12) en base64 y su clave. */
-        private String p12Base64 = "";
-        private String p12Password = "";
         /** Primer secuencial a usar si aún no hay facturas en este ambiente. */
         private int secuencialInicial = 1;
         private final Emisor emisor = new Emisor();
 
         public String getAmbiente() { return ambiente == null || ambiente.isBlank() ? "1" : ambiente.trim(); }
         public void setAmbiente(String ambiente) { this.ambiente = ambiente; }
-        public String getP12Base64() { return p12Base64; }
-        public void setP12Base64(String p12Base64) { this.p12Base64 = p12Base64; }
-        public String getP12Password() { return p12Password; }
-        public void setP12Password(String p12Password) { this.p12Password = p12Password; }
         public int getSecuencialInicial() { return Math.max(1, secuencialInicial); }
         public void setSecuencialInicial(int secuencialInicial) { this.secuencialInicial = secuencialInicial; }
         public Emisor getEmisor() { return emisor; }
@@ -42,8 +35,6 @@ public class SriFacturacionConfig {
             if (blank(emisor.ruc)) out.add("SRI_EMISOR_RUC");
             if (blank(emisor.razonSocial)) out.add("SRI_EMISOR_RAZON_SOCIAL");
             if (blank(emisor.dirMatriz)) out.add("SRI_EMISOR_DIR_MATRIZ");
-            if (blank(p12Base64)) out.add("SRI_P12_BASE64");
-            if (blank(p12Password)) out.add("SRI_P12_PASSWORD");
             return out;
         }
 

@@ -1,6 +1,7 @@
 package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.FacturacionService;
+import ec.distribuidoraguayaquil.application.service.sri.SriAjustesStore;
 import ec.distribuidoraguayaquil.domain.port.in.AuthUseCase;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.EmitirFacturaAdminRequest;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,25 @@ public class FacturacionAdminController {
     @GetMapping("/facturas/{id}")
     public Map<String, Object> get(@PathVariable String id) {
         return facturacionService.get(id);
+    }
+
+    /** Sube (o reemplaza) la firma .p12. La clave solo se usa para comprobar que abre. */
+    @PostMapping("/firma")
+    public Map<String, Object> firma(@RequestParam("file") MultipartFile file, @RequestParam("clave") String clave,
+                                     HttpServletRequest http) throws java.io.IOException {
+        if (file.isEmpty() || file.getSize() > 50_000) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Sube el archivo .p12 de tu firma electrónica.");
+        }
+        return facturacionService.guardarFirma(file.getBytes(), clave.toCharArray(), actor(http));
+    }
+
+    public record AjustesRequest(SriAjustesStore.Ajustes ajustes, Boolean confirmarProduccion) {}
+
+    /** Datos del emisor, punto de emisión y ambiente (pruebas / producción). */
+    @org.springframework.web.bind.annotation.PutMapping("/ajustes")
+    public Map<String, Object> ajustes(@RequestBody AjustesRequest body, HttpServletRequest http) {
+        return facturacionService.guardarAjustes(body.ajustes(), Boolean.TRUE.equals(body.confirmarProduccion()), actor(http));
     }
 
     @PostMapping("/emitir")

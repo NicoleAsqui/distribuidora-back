@@ -67,8 +67,8 @@ app:
   # Facturación electrónica SRI: el backend firma (XAdES-BES) y envía al SRI. Ver .env.example
   sri:
     ambiente: ${SRI_AMBIENTE:1}
-    p12-base64: ${SRI_P12_BASE64:}
-    p12-password: ${SRI_P12_PASSWORD:}
+    # Llave para cifrar la firma guardada (si se deja vacía se usa ADMIN_TOKEN_SECRET)
+    firma-key: ${SRI_FIRMA_KEY:}
     secuencial-inicial: ${SRI_SECUENCIAL_INICIAL:1}
     emisor:
       ruc: ${SRI_EMISOR_RUC:}
