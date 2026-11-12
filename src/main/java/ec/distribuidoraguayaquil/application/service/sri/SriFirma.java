@@ -1,7 +1,13 @@
 package ec.distribuidoraguayaquil.application.service.sri;
 
 import org.w3c.dom.Document;
-import xades4j.production.Enveloped;
+import org.w3c.dom.Element;
+import xades4j.algorithms.EnvelopedSignatureTransform;
+import xades4j.production.BasicSignatureOptions;
+import xades4j.production.DataObjectReference;
+import xades4j.production.SignedDataObjects;
+import xades4j.production.SigningCertificateMode;
+import xades4j.properties.DataObjectFormatProperty;
 import xades4j.production.SignatureAlgorithms;
 import xades4j.production.XadesBesSigningProfile;
 import xades4j.production.XadesSigner;
@@ -53,6 +59,10 @@ public final class SriFirma {
                             .withSignatureAlgorithm("RSA", RSA_SHA1)
                             .withDigestAlgorithmForDataObjectReferences(SHA1)
                             .withDigestAlgorithmForReferenceProperties(SHA1))
+                    .withBasicSignatureOptions(new BasicSignatureOptions()
+                            .includeSigningCertificate(SigningCertificateMode.SIGNING_CERTIFICATE)
+                            .includePublicKey(true)
+                            .signKeyInfo(true))
                     .newSigner();
         } catch (IllegalStateException e) {
             throw e;
@@ -68,7 +78,13 @@ public final class SriFirma {
     /** Firma el documento (raíz con id="comprobante") y lo devuelve como texto UTF-8. */
     public String firmar(Document doc) {
         try {
-            new Enveloped(signer).sign(doc.getDocumentElement());
+            // El SRI exige que la firma referencie el nodo raíz por su id: URI="#comprobante".
+            Element root = doc.getDocumentElement();
+            root.setIdAttribute("id", true);
+            var comprobante = new DataObjectReference("#" + root.getAttribute("id"))
+                    .withTransform(new EnvelopedSignatureTransform())
+                    .withDataObjectFormat(new DataObjectFormatProperty("text/xml").withDescription("contenido comprobante"));
+            signer.sign(new SignedDataObjects(comprobante), root);
             var tf = TransformerFactory.newInstance().newTransformer();
             tf.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
             StringWriter out = new StringWriter();

@@ -87,6 +87,11 @@ public class FacturacionAdminController {
         return facturacionService.emitir(request, actor(http));
     }
 
+    @PostMapping("/facturas/{id}/reenviar")
+    public Map<String, Object> reenviar(@PathVariable String id) {
+        return facturacionService.reenviar(id);
+    }
+
     @PostMapping("/facturas/{id}/consultar")
     public Map<String, Object> consultar(@PathVariable String id) {
         return facturacionService.reconsultar(id);

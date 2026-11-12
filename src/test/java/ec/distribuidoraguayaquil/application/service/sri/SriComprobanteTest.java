@@ -87,6 +87,7 @@ class SriComprobanteTest {
                 lineas());
         String xml = new SriFirma(p12.toByteArray(), "clave".toCharArray()).firmar(doc);
 
+        assertTrue(xml.contains("URI=\"#comprobante\""), "La firma debe referenciar #comprobante (lo exige el SRI)");
         assertTrue(xml.contains("<claveAcceso>" + clave + "</claveAcceso>"));
         assertTrue(xml.contains("<importeTotal>39.68</importeTotal>"));
         assertTrue(xml.contains("xades:SignedProperties") || xml.contains("SignedProperties"));
@@ -96,11 +97,23 @@ class SriComprobanteTest {
         f.setNamespaceAware(true);
         Document signed = f.newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
         signed.getDocumentElement().setIdAttribute("id", true);
+        var all = signed.getElementsByTagName("*");
+        for (int i = 0; i < all.getLength(); i++) {
+            Element el = (Element) all.item(i);
+            if (el.hasAttribute("Id")) el.setIdAttribute("Id", true);
+        }
         Element sigEl = (Element) signed.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature").item(0);
         var props = signed.getElementsByTagNameNS("http://uri.etsi.org/01903/v1.3.2#", "SignedProperties");
         for (int i = 0; i < props.getLength(); i++) ((Element) props.item(i)).setIdAttribute("Id", true);
         XMLSignature sig = new XMLSignature(sigEl, "");
         assertEquals(XMLSignature.ALGO_ID_SIGNATURE_RSA_SHA1, sig.getSignedInfo().getSignatureMethodURI());
         assertTrue(sig.checkSignatureValue(cert));
+        var si = sig.getSignedInfo();
+        for (int i = 0; i < si.getLength(); i++) {
+            assertTrue(si.item(i).verify(), "Referencia " + si.item(i).getURI() + " no verifica");
+        }
+        assertTrue(java.util.stream.IntStream.range(0, si.getLength()).anyMatch(i -> {
+            try { return "#comprobante".equals(si.item(i).getURI()); } catch (Exception e) { return false; }
+        }));
     }
 }

@@ -170,15 +170,7 @@ public class FacturacionService {
             String xml = firma.firmar(SriComprobante.facturaXml(e, props().getAmbiente(), clave, secuencial,
                     req.fechaEmision(), formaPago, c, lineas));
             f.setXmlFirmado(xml);
-            SriWebService ws = new SriWebService(props().getAmbiente());
-            SriWebService.Respuesta r = ws.enviar(xml);
-            boolean yaRecibida = r.mensajes().stream().anyMatch(m -> m.startsWith("43 "));
-            if ("DEVUELTA".equals(r.estado()) && !yaRecibida) {
-                f.setEstado("DEVUELTA");
-                f.setMensajes(String.join("\n", r.mensajes()));
-            } else {
-                consultar(f, ws, 6);
-            }
+            enviarAlSri(f);
         } catch (Exception ex) {
             log.error("Factura {}: {}", f.getNumero(), ex.getMessage(), ex);
             f.setEstado("ERROR");
@@ -192,6 +184,38 @@ public class FacturacionService {
                 productos.save(p);
             }
         }
+        return toDto(f);
+    }
+
+    /** Envía el XML firmado y espera la autorización. Si no hay conexión, queda en ERROR para reintentar. */
+    private void enviarAlSri(FacturaEntity f) {
+        SriWebService ws = new SriWebService(f.getAmbiente());
+        try {
+            SriWebService.Respuesta r = ws.enviar(f.getXmlFirmado());
+            boolean yaRecibida = r.mensajes().stream().anyMatch(m -> m.startsWith("43 "));
+            if ("DEVUELTA".equals(r.estado()) && !yaRecibida) {
+                f.setEstado("DEVUELTA");
+                f.setMensajes(String.join("\n", r.mensajes()));
+            } else {
+                consultar(f, ws, 6);
+            }
+        } catch (IllegalStateException ex) {
+            log.warn("Factura {}: sin conexión con el SRI: {}", f.getNumero(), ex.getMessage());
+            f.setEstado("ERROR");
+            f.setMensajes("El SRI no aceptó la conexión desde el servidor (" + ex.getMessage()
+                    + "). La factura está firmada y guardada: usa «Reintentar envío» para mandarla con el mismo número.");
+        }
+    }
+
+    /** Reintenta el envío de una factura firmada que no llegó al SRI (mismo número y clave de acceso). */
+    public Map<String, Object> reenviar(String id) {
+        FacturaEntity f = find(id);
+        if ("AUTORIZADO".equals(f.getEstado())) return toDto(f);
+        if (f.getXmlFirmado() == null || f.getXmlFirmado().isBlank()) {
+            bad("Esta factura no llegó a firmarse. Emítela de nuevo.");
+        }
+        enviarAlSri(f);
+        repository.save(f);
         return toDto(f);
     }
 
