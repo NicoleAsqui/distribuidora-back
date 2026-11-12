@@ -40,6 +40,9 @@ public interface OrderUseCase {
 
     List<OrderEvent> events(String id);
 
+    /** Borra el pedido con su historial y devuelve lo que se borró. */
+    Order delete(String id);
+
     /** Adjunta URL del PDF (GCS) al checkoutJson del pedido público. */
     Order attachPdfUrl(String code, String pdfUrl);
 

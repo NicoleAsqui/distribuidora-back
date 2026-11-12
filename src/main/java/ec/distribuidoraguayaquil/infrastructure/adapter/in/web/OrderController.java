@@ -15,6 +15,8 @@ import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.OrderAgendaRe
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.StatusUpdateRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import ec.distribuidoraguayaquil.application.service.QuotePdfStorageService;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,19 +27,19 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/**
- * Pedidos. No hay DELETE: un pedido nunca se elimina, solo cambia de estado (Cancelado incluido).
- */
+/** Pedidos. */
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
 
     private final OrderUseCase orderUseCase;
     private final AuthUseCase authUseCase;
+    private final QuotePdfStorageService pdfStorage;
 
-    public OrderController(OrderUseCase orderUseCase, AuthUseCase authUseCase) {
+    public OrderController(OrderUseCase orderUseCase, AuthUseCase authUseCase, QuotePdfStorageService pdfStorage) {
         this.orderUseCase = orderUseCase;
         this.authUseCase = authUseCase;
+        this.pdfStorage = pdfStorage;
     }
 
     @GetMapping
@@ -117,6 +119,15 @@ public class OrderController {
     public Order addPayment(@PathVariable String id, @Valid @RequestBody OrderAgendaRequests.Payment request,
                             HttpServletRequest http) {
         return orderUseCase.addPayment(id, request.amount(), request.note(), actor(http));
+    }
+
+    /** Admin: borra el pedido y sus PDF del bucket. */
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable String id) {
+        Order o = orderUseCase.delete(id);
+        String json = o.checkoutJson() == null ? "" : o.checkoutJson();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"pdfUrl\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
+        pdfStorage.deleteForCode(o.code(), m.find() ? List.of(m.group(1)) : List.of());
     }
 
     @GetMapping("/{id}/events")

@@ -404,6 +404,15 @@ public class OrderService implements OrderUseCase {
 
     @Override
     @Transactional
+    public Order delete(String id) {
+        Order o = getById(id);
+        events.deleteAll(events.findByOrderIdOrderByCreatedAtAscIdAsc(id));
+        repository.deleteById(id);
+        return o;
+    }
+
+    @Override
+    @Transactional
     public Order attachPdfUrl(String code, String pdfUrl) {
         if (pdfUrl == null || pdfUrl.isBlank() || !pdfUrl.startsWith("https://")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pdfUrl inválida");

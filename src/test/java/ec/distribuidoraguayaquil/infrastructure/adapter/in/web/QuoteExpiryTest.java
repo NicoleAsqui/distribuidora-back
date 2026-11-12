@@ -45,7 +45,7 @@ class QuoteExpiryTest {
         when(repo.save(any(PricingQuoteEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         AuthUseCase auth = mock(AuthUseCase.class);
         when(auth.usernameFromToken(any())).thenReturn("jeymy");
-        return new PricingQuoteController(repo, new ObjectMapper(), null, mock(OrderUseCase.class), auth);
+        return new PricingQuoteController(repo, new ObjectMapper(), null, mock(OrderUseCase.class), auth, null);
     }
 
     @Test

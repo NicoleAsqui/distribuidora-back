@@ -11,4 +11,7 @@ public interface OrderRepositoryPort {
     Optional<Order> findByCode(String code);
     Order save(Order order);
     long nextSequence();
+    default void deleteById(String id) {
+        throw new UnsupportedOperationException();
+    }
 }

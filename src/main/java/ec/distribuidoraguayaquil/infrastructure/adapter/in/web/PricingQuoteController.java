@@ -42,13 +42,16 @@ public class PricingQuoteController {
     private final QuoteAdminMailService quoteAdminMailService;
     private final OrderUseCase orderUseCase;
     private final AuthUseCase authUseCase;
+    private final ec.distribuidoraguayaquil.application.service.QuotePdfStorageService pdfStorage;
 
     public PricingQuoteController(
             PricingQuoteJpaRepository repository,
             ObjectMapper objectMapper,
             QuoteAdminMailService quoteAdminMailService,
             OrderUseCase orderUseCase,
-            AuthUseCase authUseCase) {
+            AuthUseCase authUseCase,
+            ec.distribuidoraguayaquil.application.service.QuotePdfStorageService pdfStorage) {
+        this.pdfStorage = pdfStorage;
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.quoteAdminMailService = quoteAdminMailService;
@@ -372,6 +375,7 @@ public class PricingQuoteController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) {
+        repository.findById(id).ifPresent(q -> pdfStorage.deleteForCode(q.getCode(), List.of()));
         repository.deleteById(id);
     }
 

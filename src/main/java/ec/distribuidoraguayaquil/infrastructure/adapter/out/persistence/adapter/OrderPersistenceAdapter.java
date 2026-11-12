@@ -36,6 +36,11 @@ public class OrderPersistenceAdapter implements OrderRepositoryPort {
     }
 
     @Override
+    public void deleteById(String id) {
+        repository.deleteById(id);
+    }
+
+    @Override
     public Order save(Order order) {
         OrderEntity entity = repository.findById(order.id()).orElseGet(OrderEntity::new);
         entity.setId(order.id());
