@@ -2,6 +2,7 @@ package ec.distribuidoraguayaquil.infrastructure.adapter.in.web;
 
 import ec.distribuidoraguayaquil.application.service.FacturacionService;
 import ec.distribuidoraguayaquil.application.service.sri.SriAjustesStore;
+import ec.distribuidoraguayaquil.application.service.sri.SriPadron;
 import ec.distribuidoraguayaquil.domain.port.in.AuthUseCase;
 import ec.distribuidoraguayaquil.infrastructure.adapter.in.web.dto.EmitirFacturaAdminRequest;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,10 +28,18 @@ public class FacturacionAdminController {
 
     private final FacturacionService facturacionService;
     private final AuthUseCase authUseCase;
+    private final SriPadron padron;
 
-    public FacturacionAdminController(FacturacionService facturacionService, AuthUseCase authUseCase) {
+    public FacturacionAdminController(FacturacionService facturacionService, AuthUseCase authUseCase, SriPadron padron) {
         this.facturacionService = facturacionService;
         this.authUseCase = authUseCase;
+        this.padron = padron;
+    }
+
+    /** Datos del cliente según el SRI (cédula o RUC), para autocompletar la factura. */
+    @GetMapping("/contribuyente")
+    public Map<String, Object> contribuyente(@RequestParam String id) {
+        return padron.buscar(id);
     }
 
     @GetMapping("/config")
